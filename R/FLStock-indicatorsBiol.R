@@ -466,11 +466,29 @@ setMethod("awa", signature(object="FLBRP"),
           function(object){
             stock.wt(object)%*%quantMeans(stock.wt(object))})
 
+#' Calculate Apical Fishing Mortality
+#'
+#' @description
+#' Calculates the maximum fishing mortality across ages (apical F) for an FLBRP object.
+#'
+#' @param x An FLBRP object
+#' @param ... Additional arguments
+#'
+#' @return An FLQuant object with apical fishing mortality values
+#'
+#' @export
+setGeneric("fapex", function(x, ...) standardGeneric("fapex"))
 
 setMethod("fapex", signature(x="FLBRP"),
           function(x, ...)
           {
             return(apply(harvest(x), 2:6, max))
+          })
+
+setMethod("fapex", signature(x="FLQuant"),
+          function(x, ...)
+          {
+            return(apply(x, 2:6, max))
           })
 
 setMethod("awa", signature(object="FLQuant"), 

@@ -28,6 +28,8 @@
 #'
 #' @return A list containing elements 'FLSR', of class *FLSR*
 #' 
+#' @export
+#' 
 #' \dontrun{
 #' load(neamac)
 #' 

@@ -24,7 +24,11 @@ Imports:
     gsl,
     akima,
     data.table,
-    deSolve
+    deSolve,
+    Rcpp
+LinkingTo:
+    TMB,
+    Rcpp
 Suggests:
     testthat (>= 3.0.0),
     knitr (>= 1.30),
