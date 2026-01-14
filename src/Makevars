@@ -1,0 +1,6 @@
+## Include TMB headers (which includes Eigen)
+TMB_HOME = $(shell Rscript --vanilla -e "cat(system.file('include', package='TMB'))")
+PKG_CPPFLAGS = -I$(TMB_HOME)
+
+## Standard C++ flags for TMB
+CXX_STD = CXX17
