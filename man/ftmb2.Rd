@@ -41,7 +41,7 @@ ftmb2(
 \arguments{
 \item{object}{Input FLSR object.}
 
-\item{spr0}{unfished spawning biomass per recruit from FLCandy::spr0Yr(FLStock)}
+\item{spr0}{unfished spawning biomass per recruit from spr0Yr(FLStock)}
 
 \item{s}{steepness parameter of SRR (fixed or prior mean)}
 

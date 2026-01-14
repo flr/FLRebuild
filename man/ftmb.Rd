@@ -39,7 +39,7 @@ ftmb(
 \arguments{
 \item{object}{Input FLSR object.}
 
-\item{spr0}{unfished spawning biomass per recruit from FLCandy::spr0Yr(FLStock)}
+\item{spr0}{unfished spawning biomass per recruit from spr0Yr(FLStock)}
 
 \item{s}{steepness parameter of SRR (fixed or prior mean)}
 
@@ -71,7 +71,7 @@ A list containing elements 'FLSR', of class *FLSR*
 \dontrun{
 load(neamac)
 
-spr0=FLCandy::spr0Yr(neamac)
+spr0=spr0Yr(neamac)
 object=as.FLSR(neamac,model="bevholtSV")
 sr=ftmb(object,s.est=T,s=0.7,s.logitsd=0.3,spr0)
 }
