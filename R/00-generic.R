@@ -153,3 +153,76 @@ setGeneric("fwd", function(object, ...) {
 #' @export
 setGeneric("results", function(object, eq, ...) standardGeneric("results"))
 
+# =============================================================================
+# FLBRP Reference Point Generic Functions
+# =============================================================================
+
+#' Calculate MSY and Virgin State Metrics
+#'
+#' @description 
+#' Calculates key metrics (F, SSB, catch, ebiomass) at virgin and MSY states for an FLBRP object
+#'
+#' @param object An object of class FLBRP
+#'
+#' @return A named vector containing metrics for virgin and MSY states:
+#'   \item{virgin.f}{F at virgin state}
+#'   \item{virgin.catch}{Catch at virgin state}
+#'   \item{virgin.ebiomass}{Equilibrium biomass at virgin state}
+#'   \item{msy.f}{F at MSY}
+#'   \item{msy.catch}{Catch at MSY}
+#'   \item{msy.ebiomass}{Equilibrium biomass at MSY}
+#'
+#' @note The function excludes virgin.ssb and msy.ssb from the output
+#'
+#' @export
+#'
+#' @rdname msyVirgin
+#' 
+#' @examples
+#' \dontrun{
+#' data(ple4brp)
+#' msyVirgin(ple4brp)
+#' }
+setGeneric("msyVirgin", function(object, ...) standardGeneric("msyVirgin"))
+
+#' Calculate Blim Reference Point
+#' 
+#' @param object An FLBRP object
+#' @param ratio Ratio of virgin recruitment to use (default 0.3)
+#' @return An FLPar object containing Blim reference points
+#' @export
+setGeneric("blim", function(object, ...) standardGeneric("blim"))
+
+#' Extract Time Series Statistics from FLStock Objects
+#'
+#' @description
+#' Creates a data frame of time series statistics from FLStock objects, including
+#' catch, ebiomass, SSB, fishing mortality, harvest rate, and mean natural mortality.
+#'
+#' @param object An object of class FLStock or FLStocks
+#' @param ... Additional arguments (not currently used)
+#'
+#' @return A data frame containing time series of:
+#'   \itemize{
+#'     \item catch - Catch values
+#'     \item eb - Exploitable biomass
+#'     \item ssb - Spawning stock biomass
+#'     \item f - Fishing mortality (Fbar)
+#'     \item h - Harvest rate (catch/ebiomass)
+#'     \item m - Mean natural mortality
+#'   }
+#'
+#' @examples
+#' \dontrun{
+#' # For single stock
+#' data(ple4)
+#' ts1 <- tseries(ple4)
+#'
+#' # For multiple stocks
+#' stocks <- FLStocks(stock1=ple4, stock2=ple4)
+#' ts2 <- tseries(stocks)
+#' }
+#'
+#' @export
+setGeneric("tseries", function(object, ...) standardGeneric("tseries"))
+
