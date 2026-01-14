@@ -119,7 +119,7 @@ ftmb<-function(object,
   if(!is.na(inflect)) Map[["log_inflect"]] = factor( NA )
   
   # CREATE TMB object
-  Obj=TMB::MakeADFun(data=inp$Data, parameters=inp$Params, map=Map, DLL="FLCandy", silent=TRUE)
+  Obj=TMB::MakeADFun(data=inp$Data, parameters=inp$Params, map=Map, DLL="FLRebuild", silent=TRUE)
   
   capture.output({Opt=stats::nlminb(start=Obj$par, objective=Obj$fn, gradient=Obj$gr,
                                     control=list("trace"=1, "eval.max"=1e4, "iter.max"=1e4),
@@ -284,7 +284,7 @@ ftmb2<-function(object,
   if(!is.na(inflect)) Map[["log_inflect"]] = factor( NA )
   
   # CREATE TMB object
-  Obj=TMB::MakeADFun(data=inp$Data, parameters=inp$Params, map=Map, DLL="FLCandy", silent=TRUE)
+  Obj=TMB::MakeADFun(data=inp$Data, parameters=inp$Params, map=Map, DLL="FLRebuild", silent=TRUE)
   
   capture.output({Opt=stats::nlminb(start=Obj$par, objective=Obj$fn, gradient=Obj$gr,
                                     control=list("trace"=1, "eval.max"=1e4, "iter.max"=1e4),
