@@ -1,6 +1,6 @@
 #' @title tseries
 #' 
-#' @description Calculates the surplus production and expected yield etc for the estinates of SSB and biomass
+#' @description Calculates the surplus production and expected yield etc for the estimates of SSB and biomass
 #'
 #' @param object an \code{FLBRP} object 
 #' @param seasons a numeric with seasons
@@ -11,6 +11,8 @@
 #'
 #' @seealso \code{\link{expand}}
 #'
+#' @importFrom FLCore mcf
+#' @importFrom plyr laply alply ldply
 #' @export tseries
 #' @docType methods
 #' @rdname tseries
@@ -19,7 +21,9 @@
 #' @examples
 #' \dontrun{
 #' }
-
+#'
+#' @rdname tseries
+#' @export
 setMethod("tseries", signature(object="FLBRP"), function(object){
   ebiomass.obs<-function(x) attributes(x)$eb.obs
 
@@ -69,18 +73,35 @@ setMethod("tseries", signature(object="FLBRP"), function(object){
   
   rtn})
 
+#' @rdname tseries
+#' @export
 setMethod("tseries", signature(object="FLBRPs"), function(object){
-      ldply(object, function(x) model.frame(FLCandy::tseries(x)))})
+      ldply(object, function(x) model.frame(tseries(x)))})
    
+#' @rdname prodPts
+#' @export
 setGeneric("prodPts", function(object, ...) standardGeneric("prodPts"))
+
+#' @rdname prodPts
+#' @export
 setMethod( "prodPts", signature(object="FLBRP"),  function(object){ tseries(object)})
+
+#' @rdname prodPts
+#' @export
 setMethod( "prodPts", signature(object="FLBRPs"), function(object){
   ldply(object, function(x) model.frame(prodPts(x)))})
 
+#' @rdname prodFn
+#' @export
 setGeneric("prodFn", function(object, ...) standardGeneric("prodFn"))
+
+#' @rdname prodFn
+#' @export
 setMethod( "prodFn", signature(object="FLBRPs"), function(object){
   ldply(object, function(x) model.frame(prodFn(x)))})
 
+#' @rdname prodFn
+#' @export
 setMethod("prodFn",signature(object="FLBRP"),function(object) {
   
   # Extract data
@@ -101,10 +122,17 @@ setMethod("prodFn",signature(object="FLBRP"),function(object) {
   
   return(pf)})
 
+#' @rdname MLP
+#' @export
 setGeneric("MLP", function(object,...) standardGeneric("MLP"))
+
+#' @rdname MLP
+#' @export
 setMethod("MLP", signature(object="FLBRPs"), function(object,rm.neg=TRUE){
   ldply(object, function(x) model.frame(MLP(x,rm.neg)))})
 
+#' @rdname MLP
+#' @export
 setMethod("MLP",signature(object="FLBRP"), 
     function(object,rm.neg=TRUE) {
             
