@@ -31,7 +31,7 @@
 #' \dontrun{
 #' load(neamac)
 #' 
-#' spr0=FLCandy::spr0Yr(neamac)
+#' spr0=spr0Yr(neamac)
 #' object=as.FLSR(neamac,model="bevholtSV")
 #' sr=ftmb(object,s.est=T,s=0.7,s.logitsd=0.3,spr0)
 #' }

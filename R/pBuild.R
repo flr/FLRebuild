@@ -62,7 +62,7 @@ pBuild <- function(ssb, eq,
 
   ## Relationship between initial biomass and recovery level by year
   t4=plyr::ddply(t3,.(data.x), with, 
-                  suppressWarnings(FLCandy::tryIt(approx(data.y,year,1)$y-1)))
+                  suppressWarnings(tryIt(approx(data.y,year,1)$y-1)))
   names(t4)=c("initial","tRecover")
     
   # Relative state
@@ -84,7 +84,7 @@ pBuild <- function(ssb, eq,
     # for each (iter, year) group, interpolate over that group's "data"
     t5_dt[, .(data = approx(x=x0, y=y0, xout=data)$y), by=.(iter, year)]}
   
-  rtn=FLCandy:::tryIt(estimateRecovery(t4, t5))
+  rtn=tryIt(estimateRecovery(t4, t5))
   
   if (is.null(rtn)) 
     return(FLQuant()) 
