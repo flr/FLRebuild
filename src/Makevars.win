@@ -1,7 +1,3 @@
-## Include TMB headers (which includes Eigen) on Windows
-## R automatically adds TMB include path when TMB is in LinkingTo,
-## but we ensure it's explicitly set for Windows
-PKG_CPPFLAGS = $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript.exe" --vanilla -e "cat(paste0('-I', system.file('include', package='TMB')))")
-
 ## Standard C++ flags for TMB
+## R automatically adds TMB and RcppEigen include paths when they are in LinkingTo
 CXX_STD = CXX17

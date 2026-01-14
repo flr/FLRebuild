@@ -1,6 +1,3 @@
-## Include TMB headers (which includes Eigen)
-TMB_HOME = $(shell Rscript --vanilla -e "cat(system.file('include', package='TMB'))")
-PKG_CPPFLAGS = -I$(TMB_HOME)
-
 ## Standard C++ flags for TMB
+## R automatically adds TMB and RcppEigen include paths when they are in LinkingTo
 CXX_STD = CXX17

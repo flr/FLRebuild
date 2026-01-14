@@ -8,5 +8,5 @@
 void R_init_FLRebuild(DllInfo* info) {
   R_registerRoutines(info, NULL, NULL, NULL, NULL);
   R_useDynamicSymbols(info, TRUE);
-  Rcpp::loadRcppModules(info);
+  // Rcpp attributes are handled automatically, no need for loadRcppModules
 }
