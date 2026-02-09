@@ -25,12 +25,6 @@ BEGIN_RCPP
 END_RCPP
 }
 
-static const R_CallMethodDef CallEntries[] = {
-    {"_FLRebuild_loglAR1", (DL_FUNC) &_FLRebuild_loglAR1, 3},
-    {NULL, NULL, 0}
-};
-
-RcppExport void R_init_FLRebuild(DllInfo *dll) {
-    R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
-    R_useDynamicSymbols(dll, FALSE);
-}
+// Note: R_init_FLRebuild is now defined in init.cpp to combine
+// both TMB and Rcpp initializations. This file only contains
+// the function implementations, not the init function.
