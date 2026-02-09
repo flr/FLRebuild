@@ -173,19 +173,19 @@ spictPE<-function(fit, xMax = 1.3, nX = 200) {
   logCpred=fit[[1]][names(fit[[1]]) == "logCpred"]
   if (length(logCpred) == 0) {
     warning("Predicted catches not found in fit object. Setting to NA.")
-    CHat=rep(NA, length(B) - 1)
+    cHat=rep(NA, length(B) - 1)
   } else {
-    CHat=exp(logCpred)
-    if (length(CHat) < length(B) - 1) {
-      CHat=CHat[seq_len(length(CHat))]
+    cHat=exp(logCpred)
+    if (length(cHat) < length(B) - 1) {
+      cHat=cHat[seq_len(length(cHat))]
     } else {
-      CHat=CHat[seq_len(length(B) - 1)]
+      cHat=cHat[seq_len(length(B) - 1)]
     }
   }
   
   # Calculate realized production: P_t = B_{t+1} - B_t + C_t
   P   =B[-1] - B[-length(B)] + C
-  PHat=B[-1] - B[-length(B)] + CHat
+  PHat=B[-1] - B[-length(B)] + cHat
  
   # Create production trajectory data.frame
   prod_traj=data.frame(
@@ -195,7 +195,7 @@ spictPE<-function(fit, xMax = 1.3, nX = 200) {
     bRel = B[-length(B)] / K,            # starting biomass of interval, relative to K
     b    = B[-length(B)],
     catch= c(C,rep(NA,max(length(cHat)-length(C),0))),
-    cHat = CHat)
+    cHat = cHat)
   
   # Add process residuals if available
   if (!is.null(fit$process.resid) && is.data.frame(fit$process.resid)) {
