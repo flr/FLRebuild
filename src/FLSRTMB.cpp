@@ -1,6 +1,13 @@
-#define TMB_LIB_INIT R_init_FLRebuild_TMB
+// Don't use TMB_LIB_INIT - we'll manually create R_init_FLRebuild
+// #define TMB_LIB_INIT R_init_FLRebuild
 
 #include <TMB.hpp>
+#include <R.h>
+#include <Rinternals.h>
+#include <R_ext/Rdynload.h>
+
+// Forward declaration for Rcpp registration
+extern void R_init_FLRebuild_Rcpp(DllInfo *dll);
 
 // Copyright Henning Winker (JRC) & Iago MOSQUEIRA (WMR), 2021
 // Authors:  Henning Winker (JRC) <henning.winker@ec.europa.eu>
@@ -139,7 +146,10 @@ Type objective_function<Type>::operator() () {
 //             return(res)}) # }}}
 
 
-// 
-//
-
-  
+// Manual initialization function for FLRebuild
+// Since we're not using TMB_LIB_INIT, we manually create R_init_FLRebuild
+// TMB templates are instantiated when MakeADFun is called, so no explicit TMB init needed
+extern "C" void R_init_FLRebuild(DllInfo *dll) {
+  // Register Rcpp routines
+  R_init_FLRebuild_Rcpp(dll);
+}

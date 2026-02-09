@@ -30,7 +30,10 @@ static const R_CallMethodDef CallEntries[] = {
     {NULL, NULL, 0}
 };
 
-RcppExport void R_init_FLRebuild_Rcpp(DllInfo *dll) {
+// Rcpp registration function
+// Called from R_init_FLRebuild in FLSRTMB.cpp
+// Note: We don't define R_init_FLRebuild here to avoid conflict with TMB
+void R_init_FLRebuild_Rcpp(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }
