@@ -1,4 +1,4 @@
-#define TMB_LIB_INIT R_init_FLRebuild_TMB
+#define TMB_LIB_INIT R_init_FLRebuild
 
 #include <TMB.hpp>
 

@@ -25,6 +25,7 @@ BEGIN_RCPP
 END_RCPP
 }
 
-// Note: R_init_FLRebuild is now defined in init.cpp to combine
-// both TMB and Rcpp initializations. This file only contains
-// the function implementations, not the init function.
+// Rcpp routines registration
+// Note: R_init_FLRebuild is defined by TMB via TMB_LIB_INIT in FLSRTMB.cpp
+// Rcpp routines are registered separately to avoid duplicate definition
+// The Rcpp function _FLRebuild_loglAR1 will be available via .Call()
