@@ -3,7 +3,7 @@
 # =============================================================================
 #' @import FLCore
 #' 
-#' Rebuild a fish population
+#' @title Rebuild Trajectories
 #' 
 #' @description Projects rebuilding trajectories from different initial SSB levels
 #'

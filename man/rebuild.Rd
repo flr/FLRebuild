@@ -7,7 +7,7 @@
 \alias{rebuild,numeric-method}
 \alias{rebuild,FLBRP-method}
 \alias{rebuild,biodyn-method}
-\title{rebuild: Rebuilding Analysis Functions}
+\title{Rebuild Trajectories}
 \usage{
 rebuild(object, ...)
 
