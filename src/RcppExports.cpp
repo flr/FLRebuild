@@ -25,7 +25,12 @@ BEGIN_RCPP
 END_RCPP
 }
 
-// Rcpp routines registration
-// Note: R_init_FLRebuild is defined by TMB via TMB_LIB_INIT in FLSRTMB.cpp
-// Rcpp routines are registered separately to avoid duplicate definition
-// The Rcpp function _FLRebuild_loglAR1 will be available via .Call()
+static const R_CallMethodDef CallEntries[] = {
+    {"_FLRebuild_loglAR1", (DL_FUNC) &_FLRebuild_loglAR1, 3},
+    {NULL, NULL, 0}
+};
+
+RcppExport void R_init_FLRebuild_Rcpp(DllInfo *dll) {
+    R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
+    R_useDynamicSymbols(dll, FALSE);
+}
