@@ -46,11 +46,11 @@ library(FLCore)
 library(FLBRP)
 data(ple4brp)
 
-# Calculate reference age at MSY with 90\% threshold
-ref_age <- abiAge(ple4brp, ref = "msy", p = 0.9)
+# Calculate reference age at FMSY with 90\% threshold
+ref_age=abiAge(ple4brp, ref = "msy", p = 0.9)
 
 # Calculate reference age at F0.1 with 95\% threshold
-ref_age <- abiAge(ple4brp, ref = "f0.1", p = 0.95)
+ref_age=abiAge(ple4brp, ref = "f0.1", p = 0.95)
 }
 
 }

@@ -67,14 +67,6 @@ ftmb(
 }
 \value{
 A list containing elements 'FLSR', of class *FLSR*
-
-\dontrun{
-load(neamac)
-
-spr0=spr0Yr(neamac)
-object=as.FLSR(neamac,model="bevholtSV")
-sr=ftmb(object,s.est=T,s=0.7,s.logitsd=0.3,spr0)
-}
 }
 \description{
 Fits Stock Recruitment Relationships (SRR) in TBM

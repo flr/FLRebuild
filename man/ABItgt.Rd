@@ -44,10 +44,10 @@ library(FLCore)
 data(ple4)
 
 # Calculate ABI at F = 0.2
-abi_tgt <- ABItgt(ple4, ftgt = 0.2, thresh = 0.9)
+abi_tgt=ABItgt(ple4, ftgt = 0.2, thresh = 0.9)
 
 # Calculate ABI at F = 0.3 with 95\% threshold
-abi_tgt <- ABItgt(ple4, ftgt = 0.3, thresh = 0.95)
+abi_tgt=ABItgt(ple4, ftgt = 0.3, thresh = 0.95)
 }
 
 }

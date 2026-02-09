@@ -8,7 +8,8 @@ pBuild(
   ssb,
   eq,
   ftar = 0,
-  rb = rebuild(eq, targetF = ftar * refpts(eq)["msy", "harvest"])
+  rb = rebuild(eq, targetF = ftar * refpts(eq)["msy", "harvest"]),
+  btar = refpts(eq)["msy", "ssb"]
 )
 }
 \arguments{

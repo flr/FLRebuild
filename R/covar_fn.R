@@ -184,7 +184,7 @@ covarFn<-function(object,fbar=as.FLQuant(refpts(object)["msy","harvest",drop=T])
           abiSSB      =abiSSB,
           spr0        =spr0(x),
           shape       =refpts(x)["msy","ssb"]/refpts(x)["virgin","ssb"],
-          s           =sv(params(x),spr0=spr0(x),model=model)["s"],
+          s           =tryIt(sv(params(x),spr0=spr0(x),model=model)["s"]),
           pe          =var(rebuild::processError(x)$pe,na.rm=TRUE)^0.5)
         
     rtn=c(rtn,rebuild::leslieFn(x))
