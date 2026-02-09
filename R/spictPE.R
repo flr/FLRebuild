@@ -77,11 +77,11 @@
 #' library(spict)
 #'
 #' # Fit SPiCT model (example)
-#' # data <- list(obsC = catch_data, timeC = catch_years, ...)
-#' # fit <- fit.spict(data)
+#' # data=list(obsC = catch_data, timeC = catch_years, ...)
+#' # fit=fit.spict(data)
 #'
 #' # Extract production function and process error
-#' pe_results <- spictPE(fit, xMax = 1.5, nX = 300)
+#' pe_results=spictPE(fit, xMax = 1.5, nX = 300)
 #'
 #' # Plot production function
 #' plot(pe_results$pf$bRel, pe_results$pf$sp, type = "l",
@@ -98,7 +98,7 @@
 #' \code{\link[spict]{get.par}} for extracting SPiCT parameters
 #'
 #' @export
-spictPE <- function(fit, xMax = 1.3, nX = 200) {
+spictPE<-function(fit, xMax = 1.3, nX = 200) {
   # Validate inputs
   if (is.null(fit)) {
     stop("'fit' cannot be NULL")
@@ -117,9 +117,9 @@ spictPE <- function(fit, xMax = 1.3, nX = 200) {
   
   # Extract parameters for Pella-Tomlinson curve
   # Note: get.par is from spict package
-  n   <- spict::get.par("logn", fit, exp = TRUE)[1, "est"]
-  msy <- spict::get.par("MSY", fit, exp = FALSE)[1, "est"]
-  K   <- spict::get.par("logK", fit, exp = TRUE)[1, "est"]
+  n  =spict::get.par("logn", fit, exp = TRUE)[1, "est"]
+  msy=spict::get.par("MSY", fit, exp = FALSE)[1, "est"]
+  K  =spict::get.par("logK", fit, exp = TRUE)[1, "est"]
   
   # Validate extracted parameters
   if (is.na(n) || is.na(msy) || is.na(K)) {
@@ -130,16 +130,16 @@ spictPE <- function(fit, xMax = 1.3, nX = 200) {
   }
   
   # Create relative biomass sequence
-  x <- seq(0.01, xMax, length.out = nX)
+  x=seq(0.01, xMax, length.out = nX)
   
   # Calculate gamma parameter for Pella-Tomlinson
-  gamma <- (1 / (n - 1)) * n^(n / (n - 1))
+  gamma=(1 / (n - 1)) * n^(n / (n - 1))
   
   # Calculate production function
-  Pfun <- gamma * msy * (x - x^n)
+  Pfun=gamma * msy * (x - x^n)
   
   # Create production function data.frame
-  prod_fun <- data.frame(
+  prod_fun=data.frame(
     bRel = x,
     b    = x * K,
     sp   = Pfun
@@ -147,13 +147,13 @@ spictPE <- function(fit, xMax = 1.3, nX = 200) {
   
   # Extract realized production trajectory
   # Biomass on SPiCT grid
-  Bfull <- spict::get.par("logB", fit, exp = TRUE)[, "est"]
-  tFull <- fit$inp$time
+  Bfull=spict::get.par("logB", fit, exp = TRUE)[, "est"]
+  tFull=fit$inp$time
   
   # Keep only integer years
-  sel <- (tFull - floor(tFull)) == 0
-  B   <- Bfull[sel]
-  t   <- tFull[sel]
+  sel=(tFull - floor(tFull)) == 0
+  B  =Bfull[sel]
+  t  =tFull[sel]
   
   # Validate biomass extraction
   if (length(B) < 2) {
@@ -161,50 +161,49 @@ spictPE <- function(fit, xMax = 1.3, nX = 200) {
   }
   
   # Extract catches aligned to biomass intervals
-  C <- fit$inp$obsC
+  C=fit$inp$obsC
   if (length(C) < length(B) - 1) {
-    warning("Catch vector shorter than expected. Truncating to match biomass intervals.")
-    C <- C[seq_len(min(length(C), length(B) - 1))]
+    #warning("Catch vector shorter than expected. Truncating to match biomass intervals.")
+    C=C[seq_len(min(length(C), length(B) - 1))]
   } else {
-    C <- C[seq_len(length(B) - 1)]
+    C=C[seq_len(length(B) - 1)]
   }
   
   # Extract predicted catches
-  logCpred <- fit[[1]][names(fit[[1]]) == "logCpred"]
+  logCpred=fit[[1]][names(fit[[1]]) == "logCpred"]
   if (length(logCpred) == 0) {
     warning("Predicted catches not found in fit object. Setting to NA.")
-    CHat <- rep(NA, length(B) - 1)
+    CHat=rep(NA, length(B) - 1)
   } else {
-    CHat <- exp(logCpred)
+    CHat=exp(logCpred)
     if (length(CHat) < length(B) - 1) {
-      CHat <- CHat[seq_len(length(CHat))]
+      CHat=CHat[seq_len(length(CHat))]
     } else {
-      CHat <- CHat[seq_len(length(B) - 1)]
+      CHat=CHat[seq_len(length(B) - 1)]
     }
   }
   
   # Calculate realized production: P_t = B_{t+1} - B_t + C_t
-  P    <- B[-1] - B[-length(B)] + C
-  PHat <- B[-1] - B[-length(B)] + CHat
-  
+  P   =B[-1] - B[-length(B)] + C
+  PHat=B[-1] - B[-length(B)] + CHat
+ 
   # Create production trajectory data.frame
-  prod_traj <- data.frame(
+  prod_traj=data.frame(
     year = utils::tail(t, -1),          # end of interval
     sp   = P,
-    spHat = PHat,
+    spHat= PHat,
     bRel = B[-length(B)] / K,            # starting biomass of interval, relative to K
     b    = B[-length(B)],
-    catch = C,
-    cHat = CHat
-  )
+    catch= c(C,rep(NA,max(length(cHat)-length(C),0))),
+    cHat = CHat)
   
   # Add process residuals if available
   if (!is.null(fit$process.resid) && is.data.frame(fit$process.resid)) {
     # Ensure process.resid has correct column names
     if (ncol(fit$process.resid) >= 3) {
-      names(fit$process.resid)[1:3] <- c("year", "bRsdl", "fRsdl")
+      names(fit$process.resid)[1:3]=c("year", "bRsdl", "fRsdl")
       # Merge with production trajectory
-      prod_traj <- merge(prod_traj, fit$process.resid, by = "year", all.x = TRUE)
+      prod_traj=merge(prod_traj, fit$process.resid, by = "year", all.x = TRUE)
     } else {
       warning("Process residuals structure unexpected. Skipping merge.")
     }
