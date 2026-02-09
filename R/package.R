@@ -1,7 +1,7 @@
 #' rebuild: Rebuilding Analysis Functions
 #' 
 #' @description Consolidated package for fisheries stock rebuilding analysis.
-#' Contains functions from FLCandy, FLRebuild, and rebuild packages needed 
+#' Contains functions from FLRebuild and rebuild packages needed 
 #' for rebuilding analysis workflows.
 #' 
 #' @name rebuild

@@ -3,7 +3,7 @@ Type: Package
 Title: Rebuilding Analysis Functions
 Version: 0.1.0
 Authors@R: person("Laurence", "Kell", email = "laurie@kell.es", role = c("aut", "cre"))
-Description: Consolidated functions for fisheries stock rebuilding analysis. Contains functions moved from FLCandy, FLRebuild packages needed for rebuilding analysis workflows.
+Description: Consolidated functions for fisheries stock rebuilding analysis. Contains functions from FLRebuild and rebuild packages needed for rebuilding analysis workflows.
 License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true

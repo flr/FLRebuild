@@ -1,6 +1,6 @@
 # rebuild: Rebuilding Analysis Functions
 
-Consolidated R package containing functions from FLCandy, FLRebuild, and rebuild packages needed for fisheries stock rebuilding analysis workflows.
+Consolidated R package containing functions from FLRebuild and rebuild packages needed for fisheries stock rebuilding analysis workflows.
 
 ## Installation
 
@@ -15,7 +15,7 @@ This package consolidates all functions needed for rebuilding analysis, eliminat
 
 ## Functions Included
 
-### From FLCandy:
+### Core Functions:
 - `toLogits()`, `fromLogits()` - Steepness parameter transformations
 - `ftmb()`, `ftmb2()`, `ftmb3()` - Stock-recruitment relationship fitting
 - `updateRefs()` - Update reference points
@@ -23,11 +23,9 @@ This package consolidates all functions needed for rebuilding analysis, eliminat
 - `abi()`, `abiAge()`, `abiMsy()` - Age-based indicators
 - `processError()` - Process error calculation
 - `covarFn()`, `leslieFn()` - Life history and demographic covariates
-
-### From FLRebuild:
 - `invSRR()`, `refCreate()`, `rmax()`, `rmsy()`, `rvirgin()` - Stock-recruitment reference points
 
-### From rebuild:
+### Rebuilding Analysis:
 - Rebuilding trajectory functions (`rebuild()`, `rebuildTime()`, etc.)
 - Pella-Tomlinson model functions
 - Bootstrap and rebuilding analysis functions
@@ -61,5 +59,5 @@ See `NEWS.md` for migration guide.
 
 ## Package Status
 
-This package consolidates functions from FLCandy and FLRebuild packages. As of version 0.1.0, this package replaces FLRebuild and is self-contained (FLRebuild is no longer a dependency). FLCandy may still be required for some internal methods.
+This package consolidates functions from FLRebuild and rebuild packages. As of version 0.1.0, this package is self-contained and has no dependencies on FLCandy or FLRebuild packages.
 

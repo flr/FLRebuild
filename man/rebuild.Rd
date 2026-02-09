@@ -48,7 +48,7 @@ An object with rebuilding trajectories
 Projects rebuilding trajectories from different initial SSB levels
 
 Consolidated package for fisheries stock rebuilding analysis.
-Contains functions from FLCandy, FLRebuild, and rebuild packages needed 
+Contains functions from FLRebuild and rebuild packages needed 
 for rebuilding analysis workflows.
 }
 \examples{

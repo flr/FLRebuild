@@ -153,7 +153,6 @@ setMethod("MLP",signature(object="FLBRP"),
 
 if (FALSE){
   library(FLBRP)
-  library(FLCandy)
   library(mgcv)
   library(nnet)
   
