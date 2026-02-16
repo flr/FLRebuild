@@ -29,7 +29,7 @@
 #' ref_pts <- msyVirgin(brp)
 #' }
 #'
-#' @importFrom FLCore fbar ssb catch metrics model.frame refpts
+#' @importFrom FLCore fbar fbar<- ssb catch metrics model.frame refpts
 #' @importFrom reshape2 melt
 #' @importFrom methods setMethod
 #'
