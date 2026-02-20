@@ -241,7 +241,7 @@ jabbaData <- function(id, icesdata, ctc1903 = NULL, indices = NULL) {
 #'   \code{sigma.proc = FALSE}. Default: 0.3
 #' @param igamma Numeric vector of length 2. Inverse-gamma prior parameters
 #'   for process error variance: c(shape, rate). Default: c(3.0, 0.1)
-#' @param q_bound Numeric vector of length 2. Bounds for catchability (q)
+#' @param Found Numeric vector of length 2. Bounds for catchability (q)
 #'   parameters: c(lower, upper). Default: c(1e-3, 1e+3)
 #' @param currentDepletion Character string. Type of current depletion prior:
 #'   \code{"bbmsy"} (B/BMSY) or \code{"ffmsy"} (F/FMSY). If empty string,
@@ -322,6 +322,7 @@ jabba <- function(catch,
                   currentDepletion = "",
                   initialDepletion = NA,
                   quick            =TRUE,
+                  nc               =3,
                   ...) {
   
   ## priors
@@ -383,13 +384,14 @@ jabba <- function(catch,
   }
   
   args <- c(args, aux)
-  
+
+
   ## Fit with Catch + Index: Simple Fox with r = Fmsy
   input <- try(do.call("build_jabba", args))
   
   if ("try-error" %in% class(input)) return(NULL)
   
-  fit <- try(fit_jabba(input, quickmcmc = quick, verbose = FALSE))
+  fit <- try(fit_jabba(input, quickmcmc = quick, verbose = FALSE, nc=nc))
   
   if ("try-error" %in% class(fit)) return(list(input = input))
   
