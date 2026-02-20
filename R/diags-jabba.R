@@ -314,10 +314,10 @@ createEmptyResult<-function(id, scenario) {
 #'   \code{\link{getResidualDiagnostics}}, \code{\link{getTerminalParameters}}
 #'
 #' @keywords internal
-runDiags<-function(jb) {
+runDiags<-function(jb,pars=c("K","r","m")) {
     
   # get all diagnostics
-  convergence = getConvergenceDiagnostics(jb)
+  convergence = getConvergenceDiagnostics(jb,pars=pars)
   residuals   = getResidualDiagnostics(jb)
   terminal    = getTerminalParameters(jb)
     
@@ -353,7 +353,7 @@ runDiags<-function(jb) {
 #' @keywords internal
 chkCols<-function(diagsList) {
   allCols = unique(unlist(lapply(diagsList, names)))
-  
+   
   lapply(diagsList, function(x) {
     missingCols = setdiff(allCols, names(x))
     if (length(missingCols) > 0) {
@@ -455,10 +455,10 @@ calcSmry<-function(data) {
 #' @seealso \code{\link{runDiags}}, \code{\link{chkCols}}, \code{\link{calcSmry}}
 #'
 #' @keywords internal
-runAll<-function(jb){
+runAll<-function(jb,pars=c("K","r","m")){
   rtn = list()
   for (id in names(jb)) {
-    rslt = runDiags(jb[[id]])
+    rslt = runDiags(jb[[id]],pars=pars)
     if (!is.null(rslt))
       rtn[[id]] = rslt}
   

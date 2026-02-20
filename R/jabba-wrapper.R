@@ -1,6 +1,6 @@
 auxFn <- function(lag = 0, obsE = 0.3, sigma = TRUE, type = "", ...) {
   args <- list(...)
-  
+   
   auxiliary <- NULL
   
   if (any(names(args) %in% c("z", "f", "ffmsy", "effort", "bbmsy", "bk"))) {
