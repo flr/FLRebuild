@@ -86,7 +86,7 @@ checkConvergenceTest<-function(pVals, threshold = P_VALUE_THRESHOLD) {
 #' @seealso \code{\link{getResidualDiagnostics}}, \code{\link{getTerminalParameters}}
 #'
 #' @keywords internal
-getConvergenceDiagnostics<-function(jb) {
+getConvergenceDiagnostics<-function(jb,pars=c("K","r","m")) {
   result = list(
     Geweke_passed = NA,
     Geweke_mean   = NA,
@@ -94,11 +94,11 @@ getConvergenceDiagnostics<-function(jb) {
     Heidel_mean   = NA)
   
   if (!is.null(jb$pars)) {
-    geweke = checkConvergenceTest(jb$pars$Geweke.p)
+    geweke = checkConvergenceTest(jb$pars[pars,"Geweke.p"])
     result$Geweke_passed = geweke$passed
     result$Geweke_mean   = geweke$mean
     
-    heidel = checkConvergenceTest(jb$pars$Heidel.p)
+    heidel = checkConvergenceTest(jb$pars[pars,"Heidel.p"])
     result$Heidel_passed = heidel$passed
     result$Heidel_mean   = heidel$mean
   }
