@@ -467,9 +467,9 @@ jabbaExtractFn <- function(x) {
     } else NULL
   }, error = function(e) NULL)
   
-  list(posteriors = posteriors,
-       trajectory = trajectory,
-       priors = priors)
+  list(posteriors = cbind(iter=seq(dim(posteriors)[1]),posteriors),
+       trajectory = cbind(iter=seq(dim(trajectory)[1]),trajectory),
+       priors     = cbind(iter=seq(dim(priors    )[1]),priors))
 }
 
 #' Extract Data from List of JABBA Fit Objects
