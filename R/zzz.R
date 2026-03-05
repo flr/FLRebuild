@@ -1,38 +1,33 @@
 # Package initialization
 # This file is loaded last (due to alphabetical ordering) and handles DLL loading
+# Following the standard TMB pattern used in FLCandy
 
 .onLoad <- function(libname, pkgname) {
   # Load the TMB DLL when the package is loaded
-  # This ensures the DLL is available when MakeADFun is called
+  # Standard TMB approach: use dyn.load(TMB::dynlib("DLLname"))
+  # Try FLCandy first (legacy DLL that previously worked), then FLRebuild
   
-  # Use library.dynam which is the standard R way to load package DLLs
-  # This works for both installed packages and development installations
-  dll_file <- system.file("libs", paste0(pkgname, .Platform$dynlib.ext), 
-                          package = pkgname, lib.loc = libname)
-  
-  # For development installations, also check src directory
-  if (!file.exists(dll_file)) {
-    dll_file <- system.file("src", paste0(pkgname, .Platform$dynlib.ext), 
-                            package = pkgname, lib.loc = libname)
-  }
-  
-  if (file.exists(dll_file)) {
-    # Use library.dynam which properly registers the DLL
-    library.dynam("FLRebuild", pkgname, libname, now = TRUE)
-  } else {
-    # Try using TMB::dynlib as a fallback (may work if package is installed)
+  # Try FLCandy first (legacy)
+  tryCatch({
+    dyn.load(TMB::dynlib("FLCandy"))
+  }, error = function(e) {
+    # If FLCandy not found, try FLRebuild
     tryCatch({
-      dll_file <- TMB::dynlib("FLRebuild")
-      if (file.exists(dll_file)) {
-        dyn.load(dll_file, local = FALSE, now = TRUE)
-      }
-    }, error = function(e) {
-      warning("FLRebuild DLL not found. The package may need to be recompiled and reinstalled.")
+      dyn.load(TMB::dynlib("FLRebuild"))
+    }, error = function(e2) {
+      # Silent failure - will be caught by .ensureTMBdll() when MakeADFun is called
     })
-  }
+  })
 }
 
 .onUnload <- function(libpath) {
-  # Unload the DLL when package is unloaded
-  library.dynam.unload("FLRebuild", libpath)
+  # Unload the DLLs when package is unloaded
+  tryCatch({
+    dll <- getLoadedDLLs()[["FLCandy"]]
+    if (!is.null(dll)) library.dynam.unload("FLCandy", libpath)
+  }, error = function(e) NULL)
+  tryCatch({
+    dll <- getLoadedDLLs()[["FLRebuild"]]
+    if (!is.null(dll)) library.dynam.unload("FLRebuild", libpath)
+  }, error = function(e) NULL)
 }
