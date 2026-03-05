@@ -7,6 +7,40 @@
 #
 # Distributed under the terms of the EUPL-1.2
 
+# Helper function to ensure TMB DLL is loaded
+.ensureTMBdll <- function(dll_name = "FLRebuild") {
+  # Check if DLL is already loaded by checking for the initialization symbol
+  # or by checking if it's in the list of loaded DLLs
+  dll_loaded <- tryCatch({
+    is.loaded("R_init_FLRebuild", PACKAGE = dll_name) || 
+    dll_name %in% names(getLoadedDLLs())
+  }, error = function(e) FALSE)
+  
+  if (!dll_loaded) {
+    # Try to load using TMB::dynlib (standard TMB way)
+    dll_file <- tryCatch({
+      TMB::dynlib(dll_name)
+    }, error = function(e) {
+      # Fallback: try to find DLL in package libs directory
+      dll_path <- system.file("libs", paste0(dll_name, .Platform$dynlib.ext), 
+                              package = "FLRebuild")
+      if (!file.exists(dll_path)) {
+        # Also try src directory for development
+        dll_path <- system.file("src", paste0(dll_name, .Platform$dynlib.ext), 
+                                package = "FLRebuild")
+      }
+      dll_path
+    })
+    
+    if (file.exists(dll_file)) {
+      dyn.load(dll_file, local = FALSE, now = TRUE)
+    } else {
+      stop("FLRebuild DLL not found at: ", dll_file, 
+           ". Please recompile and reinstall the package.")
+    }
+  }
+}
+
 # srrTMB {{{
 
 #' Fits Stock Recruitment Relationships (SRR) in TBM
@@ -117,6 +151,9 @@ ftmb<-function(object,
   if(!s.est) Map[["logit_s"]] = factor( NA ) 
   # Turn off inflection estimation if inflect is not NA
   if(!is.na(inflect)) Map[["log_inflect"]] = factor( NA )
+  
+  # Ensure TMB DLL is loaded before calling MakeADFun
+  .ensureTMBdll("FLRebuild")
   
   # CREATE TMB object
   Obj=TMB::MakeADFun(data=inp$Data, parameters=inp$Params, map=Map, DLL="FLRebuild", silent=TRUE)
@@ -282,6 +319,9 @@ ftmb2<-function(object,
   if(!s.est) Map[["logit_s"]] = factor( NA ) 
   # Turn off inflection estimation if inflect is not NA
   if(!is.na(inflect)) Map[["log_inflect"]] = factor( NA )
+  
+  # Ensure TMB DLL is loaded before calling MakeADFun
+  .ensureTMBdll("FLRebuild")
   
   # CREATE TMB object
   Obj=TMB::MakeADFun(data=inp$Data, parameters=inp$Params, map=Map, DLL="FLRebuild", silent=TRUE)

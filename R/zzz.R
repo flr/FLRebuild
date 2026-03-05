@@ -5,24 +5,30 @@
   # Load the TMB DLL when the package is loaded
   # This ensures the DLL is available when MakeADFun is called
   
-  # Try to get DLL path using TMB::dynlib (works for installed packages)
-  dll_file <- tryCatch({
-    TMB::dynlib("FLRebuild")
-  }, error = function(e) {
-    # Fallback: construct path manually
-    system.file("libs", paste0(pkgname, .Platform$dynlib.ext), package = pkgname)
-  })
+  # Use library.dynam which is the standard R way to load package DLLs
+  # This works for both installed packages and development installations
+  dll_file <- system.file("libs", paste0(pkgname, .Platform$dynlib.ext), 
+                          package = pkgname, lib.loc = libname)
   
-  # Also try src directory for development installations
+  # For development installations, also check src directory
   if (!file.exists(dll_file)) {
-    dll_file <- system.file("src", paste0(pkgname, .Platform$dynlib.ext), package = pkgname)
+    dll_file <- system.file("src", paste0(pkgname, .Platform$dynlib.ext), 
+                            package = pkgname, lib.loc = libname)
   }
   
   if (file.exists(dll_file)) {
-    dyn.load(dll_file, local = FALSE, now = TRUE)
+    # Use library.dynam which properly registers the DLL
+    library.dynam("FLRebuild", pkgname, libname, now = TRUE)
   } else {
-    warning("FLRebuild DLL not found at expected locations. ",
-            "The package may need to be recompiled and reinstalled.")
+    # Try using TMB::dynlib as a fallback (may work if package is installed)
+    tryCatch({
+      dll_file <- TMB::dynlib("FLRebuild")
+      if (file.exists(dll_file)) {
+        dyn.load(dll_file, local = FALSE, now = TRUE)
+      }
+    }, error = function(e) {
+      warning("FLRebuild DLL not found. The package may need to be recompiled and reinstalled.")
+    })
   }
 }
 
