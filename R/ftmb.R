@@ -8,56 +8,33 @@
 # Distributed under the terms of the EUPL-1.2
 
 # Helper function to ensure TMB DLL is loaded
-# Tries FLCandy first (legacy), then FLRebuild
 # Works with useDynLib() in NAMESPACE or loads manually if needed
 .ensureTMBdll <- function(dll_name = "FLRebuild") {
-  # Check if either DLL is already loaded (via useDynLib in NAMESPACE)
-  dll_loaded <- "FLCandy" %in% names(getLoadedDLLs()) || 
-                "FLRebuild" %in% names(getLoadedDLLs())
+  # Check if DLL is already loaded (via useDynLib in NAMESPACE)
+  dll_loaded <- dll_name %in% names(getLoadedDLLs())
   
   if (!dll_loaded) {
-    # Try FLCandy first (legacy DLL that previously worked)
-    dll_file <- NULL
-    
-    # Try to find FLCandy DLL in package directories
-    tryCatch({
-      dll_file <- system.file("libs", paste0("FLCandy", .Platform$dynlib.ext), 
+    # Try to find DLL in package directories
+    dll_file <- system.file("libs", paste0(dll_name, .Platform$dynlib.ext), 
+                            package = "FLRebuild")
+    if (!file.exists(dll_file)) {
+      # Also try src directory for development
+      dll_file <- system.file("src", paste0(dll_name, .Platform$dynlib.ext), 
                               package = "FLRebuild")
-      if (!file.exists(dll_file)) {
-        # Also try src directory for development
-        dll_file <- system.file("src", paste0("FLCandy", .Platform$dynlib.ext), 
-                                package = "FLRebuild")
-      }
-      if (file.exists(dll_file)) {
-        dyn.load(dll_file, local = FALSE, now = TRUE)
-        return(invisible(TRUE))
-      }
-    }, error = function(e) NULL)
+    }
     
-    # If FLCandy not found, try FLRebuild
-    tryCatch({
-      dll_file <- system.file("libs", paste0(dll_name, .Platform$dynlib.ext), 
-                              package = "FLRebuild")
-      if (!file.exists(dll_file)) {
-        # Also try src directory for development
-        dll_file <- system.file("src", paste0(dll_name, .Platform$dynlib.ext), 
-                                package = "FLRebuild")
-      }
-      if (file.exists(dll_file)) {
-        dyn.load(dll_file, local = FALSE, now = TRUE)
-      } else {
-        # Last resort: try TMB::dynlib
-        tryCatch({
-          dyn.load(TMB::dynlib(dll_name))
-        }, error = function(e2) {
-          stop("Neither FLCandy nor FLRebuild DLL found. ",
-               "Searched in libs/ and src/ directories. ",
-               "Please ensure the package is properly installed and the DLL is compiled.")
-        })
-      }
-    }, error = function(e) {
-      stop("Error loading DLL: ", e$message)
-    })
+    if (file.exists(dll_file)) {
+      dyn.load(dll_file, local = FALSE, now = TRUE)
+    } else {
+      # Last resort: try TMB::dynlib
+      tryCatch({
+        dyn.load(TMB::dynlib(dll_name))
+      }, error = function(e) {
+        stop("FLRebuild DLL not found. ",
+             "Searched in libs/ and src/ directories. ",
+             "Please ensure the package is properly installed and the DLL is compiled.")
+      })
+    }
   }
 }
 
@@ -174,18 +151,10 @@ ftmb<-function(object,
   
   # Ensure TMB DLL is loaded before calling MakeADFun
   # useDynLib() in NAMESPACE should have loaded it, but verify and load if needed
-  # Try FLCandy first (legacy that worked), then FLRebuild
-  if (!"FLCandy" %in% names(getLoadedDLLs())) {
-    .ensureTMBdll("FLCandy")
-  }
-  if (!"FLCandy" %in% names(getLoadedDLLs()) && !"FLRebuild" %in% names(getLoadedDLLs())) {
-    .ensureTMBdll("FLRebuild")
-  }
+  .ensureTMBdll("FLRebuild")
   
   # CREATE TMB object
-  # Try FLCandy first, then FLRebuild
-  dll_name <- if ("FLCandy" %in% names(getLoadedDLLs())) "FLCandy" else "FLRebuild"
-  Obj=TMB::MakeADFun(data=inp$Data, parameters=inp$Params, map=Map, DLL=dll_name, silent=TRUE)
+  Obj=TMB::MakeADFun(data=inp$Data, parameters=inp$Params, map=Map, DLL="FLRebuild", silent=TRUE)
   
   capture.output({Opt=stats::nlminb(start=Obj$par, objective=Obj$fn, gradient=Obj$gr,
                                     control=list("trace"=1, "eval.max"=1e4, "iter.max"=1e4),
@@ -351,18 +320,10 @@ ftmb2<-function(object,
   
   # Ensure TMB DLL is loaded before calling MakeADFun
   # useDynLib() in NAMESPACE should have loaded it, but verify and load if needed
-  # Try FLCandy first (legacy that worked), then FLRebuild
-  if (!"FLCandy" %in% names(getLoadedDLLs())) {
-    .ensureTMBdll("FLCandy")
-  }
-  if (!"FLCandy" %in% names(getLoadedDLLs()) && !"FLRebuild" %in% names(getLoadedDLLs())) {
-    .ensureTMBdll("FLRebuild")
-  }
+  .ensureTMBdll("FLRebuild")
   
   # CREATE TMB object
-  # Try FLCandy first, then FLRebuild
-  dll_name <- if ("FLCandy" %in% names(getLoadedDLLs())) "FLCandy" else "FLRebuild"
-  Obj=TMB::MakeADFun(data=inp$Data, parameters=inp$Params, map=Map, DLL=dll_name, silent=TRUE)
+  Obj=TMB::MakeADFun(data=inp$Data, parameters=inp$Params, map=Map, DLL="FLRebuild", silent=TRUE)
   
   capture.output({Opt=stats::nlminb(start=Obj$par, objective=Obj$fn, gradient=Obj$gr,
                                     control=list("trace"=1, "eval.max"=1e4, "iter.max"=1e4),
