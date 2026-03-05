@@ -1,5 +1,5 @@
-// Don't use TMB_LIB_INIT - we'll manually create R_init_FLRebuild
-// #define TMB_LIB_INIT R_init_FLRebuild
+// Use TMB_LIB_INIT to register TMB symbols (getParameterOrder, etc.)
+#define TMB_LIB_INIT R_init_FLRebuild
 
 #include <TMB.hpp>
 #include <R.h>
@@ -145,11 +145,26 @@ Type objective_function<Type>::operator() () {
 //             if (!is.finite(res)) res <- -1e+100
 //             return(res)}) # }}}
 
-
-// Manual initialization function for FLRebuild
-// Since we're not using TMB_LIB_INIT, we manually create R_init_FLRebuild
-// TMB templates are instantiated when MakeADFun is called, so no explicit TMB init needed
-extern "C" void R_init_FLRebuild(DllInfo *dll) {
-  // Register Rcpp routines
-  R_init_FLRebuild_Rcpp(dll);
-}
+// R_init_FLRebuild is automatically created by TMB when TMB_LIB_INIT is defined above
+// This registers all TMB symbols including getParameterOrder
+// Rcpp routines are registered separately via R_init_FLRebuild_Rcpp
+// which should be called, but since TMB owns R_init_FLRebuild, we need another approach
+// One solution: Use Rcpp attributes for auto-registration, or ensure Rcpp init is called
+// For now, let TMB create R_init_FLRebuild automatically (no manual definition needed)
+// We need to also register Rcpp routines. Since TMB creates the function,
+// we need to ensure Rcpp registration happens. We'll use R_RegisterCCallable
+// or modify the approach. Actually, the best way is to call Rcpp init from
+// within the TMB-generated function, but we can't modify that.
+// Solution: Remove manual R_init_FLRebuild and let TMB create it.
+// Then use Rcpp attributes or call Rcpp init separately.
+// For now, let's try calling Rcpp init in a way that works with TMB's auto-generated init.
+// Actually, we can use R_init_FLRebuild_Rcpp as a separate callable that TMB's init can call,
+// but TMB doesn't expose that mechanism.
+// Better: Use Rcpp's R_init_<pkg>_Rcpp which can be called separately, or use attributes.
+// Simplest: Let TMB create R_init_FLRebuild, and ensure Rcpp routines are registered via attributes.
+// But since we're manually calling R_init_FLRebuild_Rcpp, we need to call it.
+// The solution: Don't define R_init_FLRebuild manually when TMB_LIB_INIT is set.
+// Instead, we need to ensure Rcpp init is called. One way is to use R's .onLoad to call it,
+// or use Rcpp's attribute system. But the cleanest is to modify RcppExports to use attributes.
+// For now, let's comment out the manual function and see if we need Rcpp init at all,
+// or if we can register it differently.
