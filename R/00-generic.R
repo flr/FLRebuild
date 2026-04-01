@@ -226,3 +226,70 @@ setGeneric("blim", function(object, ...) standardGeneric("blim"))
 #' @export
 setGeneric("tseries", function(object, ...) standardGeneric("tseries"))
 
+# =============================================================================
+# Stock Synthesis Helper Generics
+# =============================================================================
+
+#' Run Stock Synthesis diagnostics
+#'
+#' @param object A Stock Synthesis object or path-like input, depending on method.
+#' @param ... Additional arguments passed to methods.
+#' @return Method-specific diagnostics output.
+#' @export
+setGeneric("ssDiagnostics", function(object, ...) standardGeneric("ssDiagnostics"))
+
+#' Run Stock Synthesis retrospective diagnostics
+#'
+#' @param object A retrospective object (typically a list of SS outputs).
+#' @param ... Additional arguments passed to methods.
+#' @return Method-specific retrospective diagnostics output.
+#' @export
+setGeneric("ssRetrospective", function(object, ...) standardGeneric("ssRetrospective"))
+
+#' Build equilibrium and production-curve inputs from SS output
+#'
+#' @param object A Stock Synthesis output object.
+#' @param ... Additional arguments passed to methods.
+#' @return Method-specific equilibrium/production-curve output.
+#' @export
+setGeneric("curveSS", function(object, ...) standardGeneric("curveSS"))
+
+#' Estimate vulnerable biomass from SS report components
+#'
+#' @param object A Stock Synthesis output object.
+#' @param ... Additional arguments passed to methods.
+#' @return Method-specific vulnerable biomass output.
+#' @export
+setGeneric("vBio", function(object, ...) standardGeneric("vBio"))
+
+#' Standardize SS index series and fit smooth trend
+#'
+#' @param object A data.frame containing index observations.
+#' @param ... Additional arguments passed to methods.
+#' @return Method-specific standardized index output.
+#' @export
+setGeneric("ssIndexScale", function(object, ...) standardGeneric("ssIndexScale"))
+
+#' Compute runs-test diagnostics for standardized SS index residuals
+#'
+#' @param object A data.frame containing standardized index residuals.
+#' @param ... Additional arguments passed to methods.
+#' @return Method-specific runs-test output.
+#' @export
+setGeneric("ssIndexRuns", function(object, ...) standardGeneric("ssIndexRuns"))
+
+#' Build plotting data for standardized SS indices
+#'
+#' @param object A data.frame containing index observations.
+#' @param ... Additional arguments passed to methods.
+#' @return Method-specific plotting-ready data.
+#' @export
+setGeneric("ssIndexDiagnostics", function(object, ...) standardGeneric("ssIndexDiagnostics"))
+
+#' Prepare SS index data for diagnostics
+#'
+#' @param object Raw SS index object (e.g., list output from cpueSS) or a data.frame.
+#' @param ... Additional arguments passed to methods.
+#' @return Method-specific standardized index input data.
+#' @export
+setGeneric("ssIndexPrep", function(object, ...) standardGeneric("ssIndexPrep"))

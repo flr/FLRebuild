@@ -24,16 +24,3 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-
-static const R_CallMethodDef CallEntries[] = {
-    {"_FLRebuild_loglAR1", (DL_FUNC) &_FLRebuild_loglAR1, 3},
-    {NULL, NULL, 0}
-};
-
-// Rcpp registration function
-// Called from R_init_FLRebuild in FLSRTMB.cpp
-// Note: We don't define R_init_FLRebuild here to avoid conflict with TMB
-void R_init_FLRebuild_Rcpp(DllInfo *dll) {
-    R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
-    R_useDynamicSymbols(dll, FALSE);
-}

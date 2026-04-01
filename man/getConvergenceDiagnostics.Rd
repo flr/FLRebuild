@@ -4,7 +4,7 @@
 \alias{getConvergenceDiagnostics}
 \title{Get Convergence Diagnostics from JABBA Fit}
 \usage{
-getConvergenceDiagnostics(jb)
+getConvergenceDiagnostics(jb, pars = c("K", "r", "m"))
 }
 \arguments{
 \item{jb}{JABBA fit object. Must have \code{pars} component containing

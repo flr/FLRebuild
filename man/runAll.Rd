@@ -4,7 +4,7 @@
 \alias{runAll}
 \title{Run Diagnostics for Multiple JABBA Fits}
 \usage{
-runAll(jb)
+runAll(jb, pars = c("K", "r", "m"))
 }
 \arguments{
 \item{jb}{Named list of JABBA fit objects. Each element should be a JABBA

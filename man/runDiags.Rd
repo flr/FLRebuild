@@ -4,7 +4,7 @@
 \alias{runDiags}
 \title{Run All Diagnostics for a Single JABBA Fit}
 \usage{
-runDiags(jb)
+runDiags(jb, pars = c("K", "r", "m"))
 }
 \arguments{
 \item{jb}{JABBA fit object. Should have components: \code{pars} (for

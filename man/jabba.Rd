@@ -22,6 +22,7 @@ jabba(
   currentDepletion = "",
   initialDepletion = NA,
   quick = TRUE,
+  nc = 3,
   ...
 )
 }
@@ -71,9 +72,6 @@ If FALSE, uses \code{fixed.procE}. Default: TRUE}
 \item{igamma}{Numeric vector of length 2. Inverse-gamma prior parameters
 for process error variance: c(shape, rate). Default: c(3.0, 0.1)}
 
-\item{q_bound}{Numeric vector of length 2. Bounds for catchability (q)
-parameters: c(lower, upper). Default: c(1e-3, 1e+3)}
-
 \item{currentDepletion}{Character string. Type of current depletion prior:
 \code{"bbmsy"} (B/BMSY) or \code{"ffmsy"} (F/FMSY). If empty string,
 no current depletion prior is used. Default: \code{""}}
@@ -86,6 +84,9 @@ If FALSE, uses full MCMC. Default: TRUE}
 
 \item{...}{Additional arguments passed to \code{auxFn()} for auxiliary data
 (e.g., \code{z}, \code{f}, \code{ffmsy}, \code{effort}, \code{bbmsy}, \code{bk})}
+
+\item{Found}{Numeric vector of length 2. Bounds for catchability (q)
+parameters: c(lower, upper). Default: c(1e-3, 1e+3)}
 }
 \value{
 A list with components:
