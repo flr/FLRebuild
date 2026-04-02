@@ -77,8 +77,14 @@ setMethod("curveSS", signature(object = "list"), function(object, maxY = 1.5) {
   prodFun<-splinefun(x=eql$ssb, y =eql$yield, method = "natural")
   
   ts=cbind(ts,pf=prodFun(ts$ssb))
-  ts=cbind(ts,pe=c(with(ts, (ssb[-1]-tail(ssb,-1)-tail(yield,-1)+tail(pf,-1))/tail(ssb,-1)),NA))
-
+  #ts=cbind(ts,pe=c(with(ts, (ssb[-1]-tail(ssb,-1)-tail(yield,-1)+tail(pf,-1))/tail(ssb,-1)),NA))
+  ts=cbind(ts,pe=c(with(ts, log(ssb[-1]/tail(ssb-yield+pf,-1))),NA))
+  
+  labs =object$parameters[grep("Rec",object$parameters$Label),2]
+  years=as.integer(sub(".*_(\\d{4})$", "\\1", labs))
+  ts   =merge(ts,data.frame(year=years,
+                      recDevs=object$parameters[grep("Rec",object$parameters$Label),3]))
+  
   return(list(tseries=merge(ts,vBiomass),curve=eql,refpts=rfs,triangle=triangle,derived=dq))
 })
 
@@ -104,7 +110,7 @@ setMethod("curveSS", signature(object = "character"), function(object, maxY = 1.
       out <- curveSS(object[[i]], maxY = maxY, covar = covar)
       lapply(out, function(df) {
         df <- as.data.frame(df)
-        cbind(id = ids[i], df, stringsAsFactors = FALSE)
+        cbind(id = object[i], df, stringsAsFactors = FALSE)
       })
     })
 
@@ -166,3 +172,120 @@ setMethod("vBio", signature(object = "list"), function(object) {
 
   return(rtn)
 })
+
+
+if (FALSE){
+    library(remotes)
+    remotes::install_github("flr/FLRebuild")
+    
+    
+    library(FLRebuild)
+    library(r4ss)
+    library(tidyverse)
+    
+    bass=curveSS(c("C:/active/flrpapers/PE/SS3/bass-north"))
+    
+    p1=ggplot(bass$tseries)+
+      geom_line(aes(year,log(yield/pf)))+
+      geom_point(aes(year,log(yield/pf)))+
+      geom_point(aes(year,log(sp/pf)),col="red")+
+      geom_line( aes(year,log(sp/pf)),col="red")+
+      geom_hline(aes(yintercept=0),linetype=2)+
+      theme_minimal()+
+      xlab("Year")+ylab("Process Error")+
+      labs(title="Process Error")
+
+    p2=ggplot(bass$curve)+
+      geom_line( aes(ssb,yield))+
+      geom_point(aes(ssb,yield),fill="grey",shape=21,data=bass$tseries)+
+      geom_path(aes(ssb,yield), lwd=0.25,data=bass$tseries)+
+      theme_minimal()+
+      xlab("SSB")+ylab("Yield")+
+      labs(title="Yield v SSB")+
+      scale_y_continuous(limits=c(NA,9100))
+    
+    p3=ggplot(bass$curve)+
+      geom_line( aes(ssb,yield))+
+      geom_point(aes(ssb,sp),fill="red",shape=21,data=bass$tseries)+
+      geom_path(aes(ssb,sp), col="red",lwd=0.25,data=bass$tseries)+
+      theme_minimal()+
+      xlab("SSB")+ylab("Surplus Production")+
+      labs(title="Surplus Production v SSB")+
+      scale_y_continuous(limits=c(NA,9100))
+   
+    (p2 | p3) / p1
+    
+    baSS=SS_output("C:/active/flrpapers/PE/SS3/bass-north")
+    
+    dim(baSS$parameters[grep("Rec",baSS$parameters$Label),])
+    
+    
+    bass$tseries=transform(bass$tseries, pe2=sp-pf)
+    bass$tseries=transform(bass$tseries, 
+                           recDevs=baSS$parameters[grep("Rec",baSS$parameters$Label),3])
+    ggplot(bass$tseries)+geom_point(aes(pe,recDevs))
+    
+    ccf(head(bass$tseries$pe,-1),head(bass$tseries$recDevs,-1))
+
+    
+    sma=curveSS(c("C:/active/flrpapers/PE/SS3/sma/Scenario-1",
+                  "C:/active/flrpapers/PE/SS3/sma/Scenario-2",
+                  "C:/active/flrpapers/PE/SS3/sma/Scenario-3"))
+    
+    ggplot(sma$ts)+geom_line(aes(year,pe,col=id))
+    
+    ggplot(sma$curve)+
+      geom_line(aes(ssb,yield,col=id))+
+      geom_line(aes(ssb,yield,col=id),data=sma$tseries)
+    
+    her=curveSS(c("C:/active/flrpapers/PE/SS3/sma/herring"))
+    
+    ggplot(her$tseries)+
+      geom_line(aes(year,pe))
+    
+    
+    ggplot(her$curve)+
+      geom_line(aes(ssb,yield,col=.id))+
+      geom_path(aes(ssb,yield,col=.id),data=her$tseries)
+}
+
+
+# Ignoring PE diagnostics increases the risk that advice is based on a structurally wrong model with over‑confident uncertainty, which can drive biased catch recommendations and delayed corrective action. [edepot.wur](https://edepot.wur.nl/556274)
+# 
+# ## Hidden mis‑specification and biased advice
+# 
+# - Without checking PE for trends, autocorrelation, or regime shifts, time‑varying productivity, selectivity, or catch reporting changes can be misinterpreted as stable dynamics. [repository.library.noaa](https://repository.library.noaa.gov/view/noaa/52235/noaa_52235_DS1.pdf)
+# - This can bias reference points (e.g. \(F_{\text{MSY}}\), \(B_{\text{MSY}}\)) and stock‑status estimates, so catches are set too high when productivity has declined or too low when it has increased, undermining risk equivalence across stocks. [onlinelibrary.wiley](https://onlinelibrary.wiley.com/doi/10.1111/faf.12550)
+# 
+# ## Over‑confident uncertainty and poor prediction skill
+# 
+# - Standard likelihoods assume independent, homoscedastic residuals; if PE has low‑frequency structure, variance and autocorrelation are underestimated, so confidence intervals around biomass and forecasts are too narrow. [spo.nmfs.noaa](https://spo.nmfs.noaa.gov/sites/default/files/TMSPO240.pdf)
+# - Hindcasting studies show that models with unexamined structured PE often have poor out‑of‑sample prediction skill, leading to optimistic rebuilding trajectories and underestimation of the probability of falling below limit reference points. [sciencedirect](https://www.sciencedirect.com/science/article/abs/pii/S0165783616301540)
+# 
+# ## Consequences for management outcomes
+# 
+# - **Higher probability of overfishing and limit breaches**: Biased forecasts combined with narrow uncertainty bands reduce the apparent risk of exceeding \(F_{\text{MSY}}\) or dropping below \(B_{\text{lim}}\), encouraging TACs that are less precautionary than intended. [edepot.wur](https://edepot.wur.nl/556274)
+# - **Slow detection of problems**: If retrospective patterns or PE signals are ignored, managers may only react after strong declines are evident in surveys or catches, by which time rebuilding is longer and more costly. [academic.oup](https://academic.oup.com/icesjms/article-pdf/82/2/fsaf014/61741528/fsaf014.pdf)
+# - **Inconsistent treatment of data‑limited stocks**: For Category‑2 surplus‑production assessments, failing to use PE diagnostics can make these look more reliable than they are, weakening the precautionary buffer that WKLIFE and ICES seek to maintain for data‑limited advice. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/11254397/3b640e6f-75f7-479e-aa1f-f7dba5219cd7/wklife_paper_submitted.pdf)
+# 
+# In short, not using PE diagnostics increases the chance of systematically biased advice, under‑estimated risk, and delayed management response, particularly for data‑limited or structurally complex stocks.
+# 
+# The SP v SSB & Yield v SSB plots ask related but different questions: yield vs SSB focuses on realised catches at a given biomass under the observed exploitation pattern, whereas surplus production vs SSB focuses on the stock’s underlying production dynamics and productivity at that biomass. 
+# 
+# ## Yield vs SSB
+# 
+# - A yield–SSB curve shows equilibrium or realised **yield** as a function of spawning biomass under a given fishing regime or selectivity pattern. 
+# - Interpreting it is about trade‑offs between catch and biomass: reference points like \(F_{\text{MSY}}\), \(B_{\text{MSY}}\), and rebuilding targets are often derived here, so “where are we on the yield curve?” becomes the key inference. 
+# 
+# 
+# ## Surplus production vs SSB
+# 
+# - A surplus‑production–SSB plot shows the net **production** of the stock (growth + recruitment – natural losses – catches) as a function of biomass, typically peaking near \(B_{\text{MSY}}\) and changing sign around equilibrium. [patchwork.data-imaginist](https://patchwork.data-imaginist.com/articles/guides/layout.html)
+# - Inference here is about productivity and process error: whether the production curve is symmetric/asymmetric, whether recent points lie above or below the expected curve, and how environmental or regime shifts affect surplus production at a given biomass. 
+# 
+# 
+# ## Key inference differences
+# 
+# - Yield–SSB is catch‑centric and management oriented (what yield can be taken safely at a given SSB given current selectivity and \(F\)); surplus‑production–SSB is biology‑centric (how much the stock can produce at that SSB regardless of current \(F\)).
+# 
+# - Deviations of points from the yield curve may indicate changes in exploitation or implementation error, whereas deviations from the surplus‑production curve mainly indicate changes in stock productivity, process error, or model misspecification. 

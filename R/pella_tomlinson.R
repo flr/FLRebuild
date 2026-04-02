@@ -536,7 +536,7 @@ param = function(params) {
 #' yield = production(biomass, params)
 #' 
 #' @export
-production = function(biomass, params) {
+production<-function(biomass, params) {
   r = params["r"]
   p = params["p"]
   virgin = params["virgin"]
@@ -550,8 +550,29 @@ production = function(biomass, params) {
     }
   }
   
-  (r / p) * biomass * (1 - (biomass / virgin)^p)
-}
+  (r / p) * biomass * (1 - (biomass / virgin)^p)}
+
+productionV2<-function(biomass, params) {
+  r     =params["r"]
+  p     =params["p"]
+  virgin=params["virgin"]
+  
+  if (any(biomass < 0)) {
+    stop("biomass must be non-negative")}
+  
+  if (virgin <= 0) {
+    stop("virgin must be positive")}
+  
+  ratio=biomass / virgin
+  
+  # For negative p, ratio == 0 gives 0^p which is undefined
+  if (p < 0 && any(ratio == 0)) {
+    warning("Cannot evaluate biomass = 0 when p < 0; returning NA there")}
+  
+  out=(r / p) * biomass * (1 - ratio^p)
+  out[!is.finite(out)]=NA_real_
+  out}
+
 
 #' Calculate Maximum Sustainable Yield (MSY)
 #' 

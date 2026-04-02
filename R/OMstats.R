@@ -166,6 +166,18 @@ ebiomass<-function(object){
   eb.wt =qmax(wt,0.000001)
   apply(eb.wt%*%stock.n(object),2:6,sum)}
 
+calcP<-function(shape){
+  
+  fn<-function(x,y)
+    (y-(1/(1+x))^(1/x))^2
+  
+  if (shape<0.3678794)
+    optimise(fn,c(-0.9999,-1e-20),y=shape)$minimum
+  else
+    optimise(fn,c(1e-20,10),y=shape)$minimum}
+
+shape2p<-function(shape) calcP(shape)
+  
 ## estimate p from shape
 p<-function(shape){
   
