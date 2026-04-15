@@ -1,0 +1,160 @@
+---
+title: "JABBA Workflow in FLRebuild"
+author: "Laurence T. Kell"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{JABBA Workflow in FLRebuild}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+# Purpose
+
+This vignette shows the recommended JABBA workflow now implemented in `FLRebuild`:
+
+1. Build model inputs with `jabbaInput()`
+2. Build priors with `jabbaPriors()`
+3. Fit with `runJABBA()`
+
+It also shows where to get the wider stock reference table (`icesdata::refs()`), which is separate from compact JABBA priors.
+
+# Prerequisites
+
+```{r setup, eval=FALSE}
+library(FLRebuild)
+library(icesdata)
+```
+
+`runJABBA()` relies on the `JABBA` package and an external model toolchain. If unavailable, you can still prepare and inspect inputs/priors.
+
+# Example data
+
+```{r data}
+library(icesdata)
+data(icesdata)
+
+stk <- icesdata[[1]]
+```
+
+# Step 1: Build JABBA input
+
+`jabbaInput()` converts an `FLStock` into a list with:
+
+- `catch`: data frame with `year`, `catch`
+- `index`: data frame with `year`, `index`
+
+```{r input}
+inp <- FLRebuild::jabbaInput(stk, index = "ebiomass")
+
+str(inp, max.level = 1)
+head(inp$catch)
+head(inp$index)
+```
+
+You can pass `index` as:
+
+- a function name (character), e.g. `"ebiomass"`
+- a function taking `object` and returning an index
+- an `FLQuant`
+- a data frame with columns `year`, `index`
+
+# Step 2: Build priors
+
+`jabbaPriors()` returns the compact priors object expected by JABBA:
+
+- `pr` (`FLPar`): prior means
+- `pr.sd` (`FLPar`): prior standard deviations
+
+Available methods:
+
+- `"ices"`
+- `"fishlife"`
+- `"flbrp"`
+
+```{r priors}
+priIces <- FLRebuild::jabbaPriors(stk, method = "ices")
+priFishlife <- FLRebuild::jabbaPriors(stk, method = "fishlife")
+
+priIces$pr
+priIces$pr.sd
+```
+
+## About `method = "flbrp"`
+
+```{r priors-flbrp, eval=FALSE}
+priFlbrp <- FLRebuild::jabbaPriors(stk, method = "flbrp")
+```
+
+The `flbrp` route uses `eql()`/`brp()` output and extracts reference points required for JABBA priors.
+
+# Step 3: Run JABBA
+
+Run directly from `FLStock`:
+
+```{r run-stock, eval=FALSE}
+fit <- FLRebuild::runJABBA(
+  stk,
+  method = "ices",
+  quick = TRUE,
+  nc = 3
+)
+```
+
+Or run from prepared data frames and explicit priors:
+
+```{r run-df, eval=FALSE}
+fitDf <- FLRebuild::runJABBA(
+  object = inp$catch,
+  priors = priIces,
+  index  = inp$index,
+  quick  = TRUE,
+  nc     = 3
+)
+```
+
+# Post-fit helpers
+
+`FLRebuild` provides convenience tools for JABBA outputs:
+
+```{r postfit, eval=FALSE}
+ext <- FLRebuild::jabbaExtract(fit)
+
+names(ext)
+# "posteriors" "trajectory" "priors"
+
+# Optional diagnostics/plots:
+# FLRebuild::jabbaDiagnostics(fit)
+# FLRebuild::jbplot(list(base = fit))
+```
+
+# Wide reference table is now separate
+
+The old wide table (benchmark/eqsim/fishlife + depletion summaries) is not `jabbaPriors()`.
+Use `icesdata::refs()`:
+
+```{r refs-table}
+rtab <- icesdata::refs(icesdata)
+
+head(rtab[, c(".id", "r", "shape", "psi",
+              "ssb.minyear", "ssb.maxyear",
+              "ssb.minyear.year", "ssb.maxyear.year")])
+```
+
+# Recommended pattern
+
+Use:
+
+- `FLRebuild::jabbaPriors()` for model-ready priors (`pr`, `pr.sd`)
+- `icesdata::refs()` for broad stock reference summaries
+
+This keeps model fitting inputs strict and predictable while preserving the richer reference table workflow.

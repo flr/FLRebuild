@@ -1,0 +1,218 @@
+---
+title: "JABBA Priors: Methods and Comparison"
+author: "Laurence T. Kell"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{JABBA Priors: Methods and Comparison}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+# Purpose
+
+`FLRebuild::jabbaPriors()` provides three ways to construct model-ready JABBA priors from an `FLStock`:
+
+- `"ices"`
+- `"fishlife"`
+- `"flbrp"`
+
+This vignette shows what each method uses, when to use it, and how to compare outputs.
+
+# Setup
+
+```{r setup}
+library(FLRebuild)
+library(FLBRP)
+library(icesdata)
+
+data(icesdata)
+stk <- icesdata[[1]]
+```
+
+# Output structure (same for all methods)
+
+Every method returns a list with:
+
+- `pr` (`FLPar`): prior means
+- `pr.sd` (`FLPar`): prior standard deviations
+
+Core parameter names expected by JABBA:
+
+- `r`: intrinsic growth
+- `psi`: initial depletion
+- `shape`: `Bmsy/K`
+
+Optional fields usually included:
+
+- `k`: carrying capacity proxy
+- `current`: recent depletion proxy
+
+# Method 1: `method = "ices"`
+
+Uses ICES-style stock attributes:
+
+- `eqsim(object)` for `fmsy`, `bmsy`, `b0`
+- stock time series for initial/current depletion summaries
+
+```{r priors-ices}
+priIces <- jabbaPriors(stk, method = "ices")
+priIces$pr
+priIces$pr.sd
+```
+
+Use this when your stock has robust ICES reference points available.
+
+# Method 2: `method = "fishlife"`
+
+Uses life-history information:
+
+- `fishlife(object)` for productivity proxy (`r`)
+- maximum catch scaling for `k`
+- stock time series for depletion summaries
+
+```{r priors-fishlife}
+priFishlife <- jabbaPriors(stk, method = "fishlife")
+priFishlife$pr
+priFishlife$pr.sd
+```
+
+Use this when reference-point objects are sparse but life-history attributes are available.
+
+# Method 3: `method = "flbrp"`
+
+Uses the FLBRP route:
+
+- `eql(object, model = sr)` and `brp(...)`
+- extracts reference points (`fmsy`, `bmsy`, `b0`) from FLBRP outputs
+
+```{r priors-flbrp}
+priFlbrp <- jabbaPriors(stk, method = "flbrp")
+priFlbrp$pr
+priFlbrp$pr.sd
+```
+
+Use this when you want priors tied to the fitted stock-recruit/equilibrium pathway.
+
+# Method 4 (workflow pattern): limited life history -> `lhPar`/`lhEql` -> `method = "flbrp"`
+
+You can also derive `flbrp` priors when stock data are limited by first building
+an equilibrium object from life-history inputs.
+
+Conceptually:
+
+1. Build life-history parameters (`lhPar`)
+2. Build equilibrium object (`lhEql`)
+3. Derive priors via `jabbaPriors(..., method = "flbrp")`
+
+```{r priors-lh-flbrp, eval=FALSE}
+# Illustrative pattern (exact arguments depend on your stock/species data):
+lhPars <- lhPar(
+  # e.g. linf, k, m, mat50, ...
+)
+
+lhEq <- lhEql(
+  lhPars
+  # plus any control options needed by your workflow
+)
+
+priFlbrpLh <- jabbaPriors(
+  stk,
+  method = "flbrp"
+  # if your implementation accepts an externally prepared eql/brp object,
+  # pass it here; otherwise ensure the stock carries the needed attributes
+)
+```
+
+Use this pathway when you do not have full assessment/reference-point objects,
+but you do have enough life-history information to construct a defensible
+equilibrium model.
+
+# Method 5 (workflow pattern): Leslie matrix workflow in `FLife`
+
+Another useful biology-first route is to use a Leslie matrix with `FLife`,
+then use those demographic insights to inform priors.
+
+Typical use:
+
+1. Build/obtain an object with enough life-history structure
+2. Compute Leslie matrix quantities (e.g. lambda, generation time proxies)
+3. Use those results to support prior choices (`r`, `shape`, depletion bounds)
+4. Run `jabbaPriors()` with your selected method as the formal prior object
+
+```{r priors-leslie, eval=FALSE}
+library(FLife)
+
+# Example pattern using an FLBRP object:
+L <- FLife::leslie(rp, fbar = FLCore::FLQuant(c(FLCore::refpts(rp)["msy", "harvest"])))[drop = TRUE]
+
+eig <- eigen(L)$values
+lambda <- Re(eig[which.max(Mod(eig))])
+rFromLeslie <- log(lambda)
+
+# Use Leslie-derived diagnostics to guide prior expectations/ranges,
+# then build compact JABBA priors with the chosen method:
+pri <- jabbaPriors(stk, method = "fishlife")
+# or: pri <- jabbaPriors(stk, method = "flbrp")
+```
+
+Use this workflow when you want priors grounded in age-structured demography,
+especially for data-limited stocks where life-history assumptions drive
+productivity expectations.
+
+# Side-by-side comparison
+
+```{r compare}
+toDf <- function(x, methodName) {
+  muVals <- as.numeric(c(x$pr))
+  muNames <- dimnames(x$pr)$params
+  names(muVals) <- muNames
+
+  sdVals <- as.numeric(c(x$pr.sd))
+  sdNames <- dimnames(x$pr.sd)$params
+  names(sdVals) <- sdNames
+
+  data.frame(
+    method = methodName,
+    param = muNames,
+    mean = as.numeric(muVals),
+    sd = as.numeric(sdVals[match(muNames, sdNames)])
+  )
+}
+
+cmp <- rbind(
+  toDf(priIces, "ices"),
+  toDf(priFishlife, "fishlife"),
+  toDf(priFlbrp, "flbrp")
+)
+
+cmp
+```
+
+# Practical guidance
+
+- Start with `"ices"` when ICES attributes are complete and trusted.
+- Use `"fishlife"` when you need a biologically informed fallback.
+- Use `"flbrp"` when your workflow is explicitly anchored in the FLBRP/equilibrium fit.
+- Compare methods as a sensitivity check before final JABBA runs.
+
+# Next step: fit model
+
+Once priors are selected:
+
+```{r next-step, eval=FALSE}
+fit <- runJABBA(stk, method = "ices", quick = TRUE, nc = 3)
+```
+
+For full workflow details, see the vignette:
+
+- `vignettes/jabba-workflow.Rmd`

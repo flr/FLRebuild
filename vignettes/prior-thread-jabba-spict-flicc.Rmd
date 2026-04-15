@@ -1,0 +1,174 @@
+---
+title: "Unified Prior Thread: JABBA, SPiCT, and FLICC"
+author: "Laurence T. Kell"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Unified Prior Thread: JABBA, SPiCT, and FLICC}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+# Purpose
+
+This vignette outlines a single prior-generation thread that can feed:
+
+- JABBA
+- SPiCT
+- FLICC
+
+The key idea is to first build a canonical prior object from one of several
+pathways (`ices`, `fishlife`, `flbrp`, `lhPar`/`lhEql`, Leslie matrix), then
+map that object into model-specific prior inputs.
+
+# Why a unified thread
+
+A shared thread helps:
+
+- keep biological assumptions consistent across models
+- document provenance of each prior
+- run sensitivity analyses in a reproducible way
+- avoid hidden differences in model defaults
+
+# Setup
+
+```{r setup}
+library(FLRebuild)
+library(icesdata)
+
+data(icesdata)
+stk <- icesdata[[1]]
+```
+
+# Step 1: Build canonical priors
+
+Use one of the available pathways:
+
+- `jabbaPriors(stk, method = "ices")`
+- `jabbaPriors(stk, method = "fishlife")`
+- `jabbaPriors(stk, method = "flbrp")`
+- life-history to FLBRP route (`lhPar`, `lhEql`)
+- Leslie matrix route (`FLife::leslie`)
+
+```{r canonical-prior-example}
+pri <- FLRebuild::jabbaPriors(stk, method = "ices")
+pri$pr
+pri$pr.sd
+```
+
+Create a canonical table with core quantities. This is a lightweight structure
+you can save and pass to adapter functions:
+
+```{r canonical-table}
+canonical <- FLRebuild::canonicalPriors(stk, method = "ices")
+
+canonical
+```
+
+# Step 2: Optional uncertainty layer (CV and covariance)
+
+You can enrich canonical priors with:
+
+- `cv`: coefficient of variation (`sd / mean`)
+- covariance matrix: from `sd` and assumed/estimated correlations
+
+```{r cv-and-covariance}
+# Basic independent assumption (diagonal covariance):
+covMatIndependent <- FLRebuild::priorCovariance(canonical)
+
+canonical[, c("param", "mean", "sd", "cv")]
+covMatIndependent
+```
+
+If you have correlation assumptions, build a correlation matrix and convert to
+covariance:
+
+```{r covariance-with-correlation, eval = FALSE}
+rho <- diag(nrow(canonical))
+dimnames(rho) <- list(canonical$param, canonical$param)
+
+# Example: set correlation between two parameters
+# rho["r", "shape"] <- 0.3
+# rho["shape", "r"] <- 0.3
+
+sdDiag <- diag(canonical$sd)
+covMat <- FLRebuild::priorCovariance(canonical, correlation = rho)
+```
+
+# Step 3: Add provenance metadata
+
+Track where priors came from and what assumptions were used:
+
+```{r provenance}
+priorMeta <- list(
+  stockId = names(icesdata)[1],
+  pathway = "ices",
+  notes = "Baseline run for cross-model comparison",
+  generatedOn = as.character(Sys.Date())
+)
+
+priorMeta
+```
+
+# Step 4: Map to model-specific priors (adapters)
+
+Use package adapters so each model gets priors in the expected shape.
+
+```{r adapters, eval = FALSE}
+jabbaPrior <- FLRebuild::asJabbaPriors(canonical)
+spictPrior <- FLRebuild::asSpictPriors(canonical, covariance = covMatIndependent)
+fliccPrior <- FLRebuild::asFliccPriors(canonical, covariance = covMatIndependent)
+```
+
+# Step 5: Run model entry points from one prior thread
+
+```{r model-entrypoints, eval = FALSE}
+fitJabba <- FLRebuild::runJABBA(
+  stk,
+  method = "ices",
+  priors = jabbaPrior,
+  quick = TRUE,
+  nc = 3
+)
+
+# SPiCT (illustrative)
+spictPrior <- FLRebuild::asSpictPriors(canonical, covariance = covMatIndependent)
+# fitSpict <- fit.spict(data = ..., priors = spictPrior)
+
+# FLICC (illustrative)
+fliccPrior <- FLRebuild::asFliccPriors(canonical, covariance = covMatIndependent)
+# fitFlicc <- FLRebuild::fitFLICC(stk, ...)
+```
+
+# Step 6: Sensitivity over pathways
+
+Build multiple canonical priors and compare fits under each pathway:
+
+```{r sensitivity-template, eval = FALSE}
+pathways <- c("ices", "fishlife", "flbrp")
+
+priorsByPathway <- lapply(pathways, function(mth) {
+  cc <- FLRebuild::canonicalPriors(stk, method = mth, source = mth)
+  transform(cc, pathway = mth)
+})
+names(priorsByPathway) <- pathways
+
+do.call(rbind, priorsByPathway)
+```
+
+# Recommended project pattern
+
+- Keep one canonical prior object per stock and pathway
+- Version that object with metadata and date
+- Store CV and covariance assumptions explicitly
+- Use explicit adapters for each model
+- Compare pathway-induced differences before final advice
