@@ -1,3 +1,4 @@
 ## Standard C++ flags for TMB
 ## R automatically adds TMB and RcppEigen include paths when they are in LinkingTo
 CXX_STD = CXX17
+PKG_CXXFLAGS += -Wa,-mbig-obj

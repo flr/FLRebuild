@@ -14,26 +14,25 @@
   dll_loaded <- dll_name %in% names(getLoadedDLLs())
   
   if (!dll_loaded) {
-    # Try to find DLL in package directories
-    dll_file <- system.file("libs", paste0(dll_name, .Platform$dynlib.ext), 
-                            package = "FLRebuild")
-    if (!file.exists(dll_file)) {
-      # Also try src directory for development
-      dll_file <- system.file("src", paste0(dll_name, .Platform$dynlib.ext), 
-                              package = "FLRebuild")
-    }
-    
-    if (file.exists(dll_file)) {
+    dll_basename <- paste0(dll_name, .Platform$dynlib.ext)
+    arch <- gsub("^[/\\\\]+", "", .Platform$r_arch)
+
+    # Try common install/development locations, including arch subdirectories on Windows.
+    dll_candidates <- unique(c(
+      system.file("libs", dll_basename, package = "FLRebuild"),
+      if (nzchar(arch)) system.file("libs", arch, dll_basename, package = "FLRebuild") else "",
+      system.file("src", dll_basename, package = "FLRebuild"),
+      TMB::dynlib(dll_name)
+    ))
+    dll_candidates <- dll_candidates[nzchar(dll_candidates)]
+    dll_file <- dll_candidates[file.exists(dll_candidates)][1]
+
+    if (!is.na(dll_file)) {
       dyn.load(dll_file, local = FALSE, now = TRUE)
     } else {
-      # Last resort: try TMB::dynlib
-      tryCatch({
-        dyn.load(TMB::dynlib(dll_name))
-      }, error = function(e) {
-        stop("FLRebuild DLL not found. ",
-             "Searched in libs/ and src/ directories. ",
-             "Please ensure the package is properly installed and the DLL is compiled.")
-      })
+      stop("FLRebuild DLL not found. ",
+           "Searched: ", paste(dll_candidates, collapse = ", "), ". ",
+           "Please ensure the package is properly installed and the DLL is compiled.")
     }
   }
 }

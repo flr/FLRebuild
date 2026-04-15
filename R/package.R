@@ -8,6 +8,8 @@
 #' @aliases rebuild-package
 #' 
 #' @importFrom methods setGeneric setMethod
+#' @importFrom plyr aaply
+#' @useDynLib FLRebuild
 #' 
 #' @examples
 #' # Load the package

@@ -18,7 +18,6 @@ setGeneric("awa", function(object, ...) standardGeneric("awa"))
 #'  
 #' @rdname awa
 #' 
-#' @aliases 
 #' @seealso \code{\link{ssb}}, \code{\link{ssb.age}}, 
 #' \code{\link{pos}}, \code{\link{spawnOnce}}, 
 #' \code{\link{asa}}, \code{\link{awa}},   
@@ -48,7 +47,6 @@ setGeneric("fjuv", function(object, ...) standardGeneric("fjuv"))
 #'
 #' @rdname fjuv
 #' 
-#' @aliases 
 #' @seealso \code{\link{ssb}}, \code{\link{ssb.age}}, 
 #' \code{\link{pos}}, \code{\link{spawnOnce}}, 
 #' \code{\link{asa}}, \code{\link{awa}},   

@@ -73,7 +73,7 @@ mFn <- function(shape, fmsy) {
 #' @seealso \code{\link{jabba}}, \code{\link{jabbaData}}
 #'
 #' @export
-jabbaPriors <- function(icesdata) {
+.legacyJabbaPriorsTable <- function(icesdata) {
   eqsm <- eqsim(icesdata)
   benchm <- benchmark(icesdata)
   initial <- ldply(icesdata, function(x) {
