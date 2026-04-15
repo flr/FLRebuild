@@ -334,14 +334,6 @@ function(object, method=c("ices", "fishlife", "flbrp"),
   )
 })
 
-# Preserve legacy list-of-stocks behavior used by existing FLRebuild workflows.
-#' @rdname jabbaPriors
-#' @exportMethod jabbaPriors
-setMethod("jabbaPriors", signature(object="list"),
-function(object, method=c("ices", "fishlife", "flbrp"), ...) {
-  .legacyJabbaPriorsTable(object)
-})
-
 #' @rdname runJABBA
 #' @exportMethod runJABBA
 setMethod("runJABBA", signature(object="FLStock"),

@@ -87,9 +87,17 @@ mFn <- function(shape, fmsy) {
   fl <- fishlife(icesdata)
   
   priors <- merge(benchm[, -8], eqsm[, c(".id", "bmsy", "b0")], by = ".id")
-  priors <- merge(priors, transmute(fl, .id = .id, r = r), by = ".id")
-  priors <- merge(priors, transmute(initial, .id = .id, initial = ssb), by = ".id")
-  priors <- merge(priors, transmute(current, .id = .id, current = ssb), by = ".id")
+  priors <- merge(priors, dplyr::transmute(fl, .id = .id, r = r), by = ".id")
+  priors <- merge(
+    priors,
+    dplyr::transmute(initial, .id = .id, initial = ssb, ssb.minyear.year = year),
+    by = ".id"
+  )
+  priors <- merge(
+    priors,
+    dplyr::transmute(current, .id = .id, current = ssb, ssb.maxyear.year = year),
+    by = ".id"
+  )
   priors <- transform(priors,
                       shape = bmsy / b0,
                       ssb.maxyear = current / bmsy,
