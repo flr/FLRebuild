@@ -129,6 +129,14 @@ spictPrior <- FLRebuild::asSpictPriors(canonical, covariance = covMatIndependent
 fliccPrior <- FLRebuild::asFliccPriors(canonical, covariance = covMatIndependent)
 ```
 
+For a FLICC-specific YPR-driven route, use:
+
+```{r flicc-ypr-priors}
+fliccYpr <- FLRebuild::asFliccPriorsYpr(stk)
+fliccYpr$reference
+head(fliccYpr$curve)
+```
+
 # Step 5: Run model entry points from one prior thread
 
 ```{r model-entrypoints, eval = FALSE}
