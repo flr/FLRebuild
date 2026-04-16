@@ -80,6 +80,7 @@ setMethod("curveSS", signature(object = "list"), function(object, maxY = 1.5) {
   #ts=tryIt(cbind((ts,pe=c(with(ts, (ssb[-1]-tail(ssb,-1)-tail(yield,-1)+tail(pf,-1))/tail(ssb,-1)),NA))
   ts=tryIt(cbind(ts,pe =c(with(ts, log(ssb[-1]/tail(ssb-yield+pf,-1))),NA),
                     pe2=c(with(ts,     ssb[-1]/tail(ssb-yield+pf,-1)), NA)))
+                    pe2=c(with(ts,     (tail(ssb-yield+pf,-1)-ssb[-1])/tail(ssb-yield+pf,-1)), NA)))
   
   labs =object$parameters[grep("Rec",object$parameters$Label),2]
   years=as.integer(sub(".*_(\\d{4})$", "\\1", labs))
