@@ -44,6 +44,7 @@ library(icesdata)
 data(icesdata)
 
 stk <- icesdata[[1]]
+# eq <- eql(stk)   # or an FLBRP you already have (jabba-f)
 ```
 
 # Step 1: Build JABBA input
@@ -99,7 +100,37 @@ The `flbrp` route uses `eql()`/`brp()` output and extracts reference points requ
 
 # Step 3: Run JABBA
 
-Run directly from `FLStock`:
+From an \code{FLStock} and an \code{FLBRP}: catch and the biomass index come
+from the stock; \(F_{\mathrm{MSY}}\), \(B_{\mathrm{MSY}}\) and \(B_0\) come
+from the equilibrium object. The default index is exploitable biomass.
+
+```{r run-stock-eq, eval=FALSE}
+fit  <- FLRebuild::runJABBA(stk, eq, index = ebiomass)
+fitF <- FLRebuild::runJABBA(stk, eq, index = ebiomass, f = ffmsy)
+bd   <- FLRebuild::runJABBA(stk, eq, index = ebiomass, output = "mpb")
+bd   <- FLRebuild::jabba2biodyn(fit)   # same, from an existing fit
+
+# Process error: estimate SD (default), fix it, or scale by B/BMSY
+fitFix <- FLRebuild::runJABBA(stk, eq, index = ebiomass, sigma.proc = 0.07)
+fitPE  <- FLRebuild::runJABBA(stk, eq, index = ebiomass, proc.dyn = TRUE)
+bdPE   <- FLRebuild::jabba2biodyn(fitPE)
+```
+
+`f = "ffmsy"` is the jabba-f auxiliary series \(F/F_{\mathrm{MSY}}\) from
+`fbar` and `eq`. Absolute \(F\) is `f = fbar` (or `f = "f"`).
+
+Process error (`sigma.proc = TRUE` by default) is estimated with inverse-gamma
+prior `igamma = c(3, 0.1)`. Pass a number to fix it. `proc.dyn = TRUE` scales
+that SD by depletion: \(\sigma_t = \sigma \times \mathrm{relsig}(B/B_{\mathrm{MSY}})\)
+(GitHub JABBA with `proc.dyn`). The curve coefficients default to JABBA's
+ICES values; override with `pe = c(a = 0.2, c = 0.35, d = 2)`.
+
+```{r run-pe-args, eval=FALSE}
+fitPE <- FLRebuild::runJABBA(stk, eq, index = ebiomass, proc.dyn = TRUE,
+                              pe = c(a = 0.2, c = 0.35, d = 2))
+```
+
+From an \code{FLStock} alone, using a prior method:
 
 ```{r run-stock, eval=FALSE}
 fit <- FLRebuild::runJABBA(
@@ -139,7 +170,34 @@ names(ext)
 # Process-error time series and four-panel diagnostics:
 # ts <- FLRebuild::jabbaTs(fit)
 # FLRebuild::plotPe(ts)
+# FLRebuild::plotJabbaTs(fit)
+
+
+# Constant vs depletion-dependent process error
+
+A single fit with depletion-dependent PE:
+
+```{r run-pe, eval=FALSE}
+fitPE <- FLRebuild::runJABBA(stk, eq, index = ebiomass, proc.dyn = TRUE)
+fitPE <- FLRebuild::runJABBA(stk, eq, index = ebiomass, proc.dyn = TRUE,
+                              pe = c(a = 0.2, c = 0.35, d = 2))
+tsPE  <- FLRebuild::jabbaTs(fitPE)
+plotPe(tsPE)
+bdPE  <- FLRebuild::jabba2biodyn(fitPE)
 ```
+
+`compareJabbaPE()` fits constant PE and `proc.dyn = TRUE` on the same stock
+and priors:
+
+```{r compare-pe, eval=FALSE}
+cmp <- FLRebuild::compareJabbaPE(stk, eq = eq, quick = TRUE, nc = 3)
+cmp$status
+plot(cmp)
+plotPe(cmp$ts$constant)
+plotPe(cmp$ts$proc.dyn)
+```
+
+The relative-SD curve is `relsig()` (ICES coefficients hardcoded in JABBA).
 
 # Wide reference table is now separate
 

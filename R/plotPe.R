@@ -158,10 +158,10 @@ plotPe <- function(object,
     ggplot2::theme_minimal()
 
   
-  p1=p1=labs(subtitle="Time Series")
-  p2=p2=labs(subtitle="Depletion")
-  p3=p3=labs(subtitle="Lags")
-  p4=p4=labs(subtitle="Mean and Variance")
+  p1=p1+labs(subtitle="Time Series")
+  p2=p2+labs(subtitle="Depletion")
+  p3=p3+labs(subtitle="Lags")
+  p4=p4+labs(subtitle="Mean and Variance")
   plots <- list(time = p1, status = p2, acf = p3, hist = p4)
 
   if (isTRUE(combine) && requireNamespace("patchwork", quietly = TRUE))
