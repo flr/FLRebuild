@@ -1,13 +1,16 @@
 Package: FLRebuild
 Type: Package
 Title: Rebuilding Analysis Functions
-Version: 0.2.2
-Date: 2026-08-29
+Version: 0.2.4
+Date: 2026-09-18
 Authors@R: person("Laurence", "Kell", email = "laurie@kell.es", role = c("aut", "cre"))
-Description: Consolidated functions for fisheries stock rebuilding analysis. Contains functions from FLRebuild and rebuild packages needed for rebuilding analysis workflows.
+Description: Consolidated functions for fisheries stock rebuilding analysis,
+    including analytic multivariate-lognormal (MVLN) Kobe projections from
+    Stock Synthesis delta-method output.
 License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true
+VignetteBuilder: knitr
 RoxygenNote: 7.3.3
 Imports:
     FLCore (>= 2.6.0),
@@ -26,7 +29,8 @@ Imports:
     akima,
     data.table,
     deSolve,
-    Rcpp
+    Rcpp,
+    mvtnorm
 LinkingTo:
     TMB,
     Rcpp,
@@ -36,4 +40,5 @@ Suggests:
     knitr (>= 1.30),
     rmarkdown (>= 2.0),
     patchwork,
-    icesdata
+    icesdata,
+    r4ss
