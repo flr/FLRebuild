@@ -1,0 +1,238 @@
+---
+title: "Analytic MVLN projections (SCRS/2026/178)"
+author: "Laurence T. Kell"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Analytic MVLN projections (SCRS/2026/178)}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse    = TRUE,
+  comment     = "#>",
+  fig.width   = 8,
+  fig.height  = 4,
+  dpi         = 120)
+```
+
+# Purpose
+
+[Liniers, Kimoto and Fernandez (SCRS/2026/178)](https://www.iccat.int/)
+report North Atlantic shortfin mako projections to 2070 under constant catch,
+with a Kobe II strategy matrix built from 20,000 multivariate-lognormal (MVLN)
+Monte Carlo draws.
+
+This vignette reproduces the same **figures and Table 1** using the
+**analytic** orthant probabilities in `FLRebuild`, so there is no Monte Carlo
+error. Plots use **vanilla ggplot2** only.
+
+# API (consolidated in `R/mvln.R`)
+
+| Step | Function | Role |
+|------|----------|------|
+| Load runs | `getRuns()` | Named list of SS outputs (catch = name) |
+| Moments | `kobeMomentGrid()` | Log-scale $(\mu_B,\mu_F,\Sigma)$ by catch $\times$ year |
+| K2SM | `makeK2SM()` | $P(F\le F_{MSY})$, $P(SSF\ge SSF_{MSY})$, green |
+| Trajectories | `ssfTrajectory()` / `fTrajectory()` + `lognormalCI()` | Medians and ribbons |
+| Rebuild refs | `makeRebuildRefs()` | RebuildAge $T_{lim}$, $T_{trig}$, $B_{gt}$, $B_{gt50}$ |
+
+Monte Carlo draws remain available as `ssmvln()` for path functionals; they are
+not needed for the advice tables below.
+
+# Setup
+
+```{r setup}
+library(FLRebuild)
+library(ggplot2)
+
+ssDir   ="P:/rfmo/iccat/2026/SHK/Analysis/NSMA_projection/SSoutput"
+ssExists=dir.exists(ssDir) &&
+  length(list.files(ssDir, pattern = "_250t\\.Rdata$", ignore.case = TRUE)) > 0
+
+k2Yrs   =c(2027, 2028, 2029, 2030, 2035, 2040, 2045,
+              2050, 2055, 2060, 2065, 2070)
+tacs    =c(0, 250, 1200, 1883, 2300)
+```
+
+```{r load-runs, eval=ssExists}
+source("C:/active/flr/FLRebuild/R/trajectory.R")
+source("C:/active/flr/FLRebuild/R/mvln.R")
+
+# get HW2e_HW2d_InitFprior_{catch}t.Rdata and name each run by catch (t)
+runs=getRuns(ssDir)
+```
+
+# Figure 1 — relative trajectories
+
+SCRS Figure 1: $SSF/SSF_{MSY}$ and $F/F_{MSY}$ under constant catch. Ribbons are
+lognormal intervals from the delta-method SE on the **ratio** (same assumption
+as the analytic Kobe probabilities).
+
+```{r fig1, eval=ssExists}
+LEVELS=c(0.5, 0.8, 0.95)
+pick=intersect(as.character(tacs), names(runs))
+
+bindCI=function(FUN, catch_ids) {
+  out=do.call(rbind, lapply(catch_ids, function(nm) {
+    transform(lognormalCI(FUN(runs[[nm]]), levels = LEVELS),
+              catch = as.numeric(nm))
+  }))
+  out$catch=factor(out$catch, levels = as.numeric(catch_ids))
+  out}
+
+ssbCI=bindCI(ssfTrajectory, pick)
+fCI  =bindCI(fTrajectory,   pick)
+
+# one median row per year × catch (CI levels share the same median)
+ssbMed=ssbCI[!duplicated(ssbCI[, c("year", "catch")]), , drop = FALSE]
+fMed  =fCI[!duplicated(fCI[, c("year", "catch")]), , drop = FALSE]
+```
+
+```{r}
+ggplot(ssbCI, aes(year, ratio)) +
+  geom_ribbon(aes(ymin = ratioLo, ymax = ratioHi, alpha = factor(level)),
+              fill = "#1b9e77") +
+  scale_alpha_manual(values = c("0.5" = 0.35, "0.8" = 0.22, "0.95" = 0.12),
+                     name = "Level") +
+  geom_line(data = ssbMed, linewidth = 0.7) +
+  geom_hline(yintercept = 1, linetype = "dashed", colour = "grey40") +
+  facet_wrap(~catch, nrow = 1, labeller = label_both) +
+  labs(x = NULL, y = expression(SSF / SSF[MSY])) +
+  scale_y_continuous(limits=c(0,NA))+
+  theme_bw(base_size = 11) +
+  theme(panel.grid.minor = element_blank())
+```
+
+```{r}
+ggplot(fCI, aes(year, ratio)) +
+  geom_ribbon(aes(ymin = ratioLo, ymax = ratioHi, alpha = factor(level)),
+              fill = "#1b9e77") +
+  scale_alpha_manual(values = c("0.5" = 0.35, "0.8" = 0.22, "0.95" = 0.12),
+                     name = "Level") +
+  geom_line(data = fMed, linewidth = 0.7) +
+  geom_hline(yintercept = 1, linetype = "dashed", colour = "grey40") +
+  facet_wrap(~catch, nrow = 1, labeller = label_both) +
+  labs(x = NULL, y = expression(F / F[MSY])) +
+  scale_y_continuous(limits=c(0,NA))+
+  theme_bw(base_size = 11) +
+  theme(panel.grid.minor = element_blank())
+```
+
+# Table 1 — analytic Kobe II strategy matrix
+
+SCRS Table 1 reports three blocks. `makeK2SM()` evaluates each cell with
+`mvtnorm::pmvnorm` (green) or `pnorm` (marginals).
+
+```{r table1, eval=ssExists}
+k2=makeK2SM(runs, years = k2Yrs, transform = "exact", asPercent = TRUE)
+
+# Preview a slice matching the paper's emphasis (0–2300 t, selected years)
+yrs_show=as.character(c(2027, 2030, 2040, 2050, 2070))
+slice_mat=function(m)
+  m[m$catch %in% tacs, c("catch", intersect(yrs_show, names(m)))]
+
+knitr::kable(slice_mat(k2$pNoOverfishing),
+             caption = "P(F ≤ FMSY) (%), analytic")
+knitr::kable(slice_mat(k2$pNotOverfished),
+             caption = "P(SSF ≥ SSFMSY) (%), analytic")
+knitr::kable(slice_mat(k2$green),
+             caption = "P(green) (%), analytic")
+```
+
+# Figure 2 — year-specific distributions (analytic densities)
+
+SCRS Figure 2 shows histograms of MVLN draws. The analytic counterpart is the
+**lognormal density** implied by the same moments (no sampling).
+
+```{r fig2, eval=ssExists}
+grid=kobeMomentGrid(runs[as.character(tacs)],
+                       years = c(2026, 2028, 2030, 2050, 2070),
+                       transform = "exact")
+
+dens_df=do.call(rbind, lapply(seq_len(nrow(grid)), function(i) {
+  g=grid[i, ]
+  xb=exp(seq(log(0.2), log(3), length.out = 200))
+  xf=exp(seq(log(0.05), log(4), length.out = 200))
+  rbind(
+    data.frame(catch = g$catch, year = g$year, quantity = "SSF/SSFmsy",
+               x = xb,
+               dens = dlnorm(xb, meanlog = g$muB, sdlog = g$sigmaB)),
+    data.frame(catch = g$catch, year = g$year, quantity = "F/Fmsy",
+               x = xf,
+               dens = dlnorm(xf, meanlog = g$muF, sdlog = g$sigmaF))
+  )
+}))
+```
+
+```{r}
+ggplot(subset(dens_df,quantity=="SSF/SSFmsy"), 
+       aes(x, dens, colour = factor(catch))) +
+  geom_line(linewidth = 0.6) +
+  geom_vline(xintercept = 1, linetype = "dashed", colour = "grey50") +
+  facet_grid(quantity ~ year, scales = "free") +
+  scale_x_log10() +
+  labs(x = "Ratio", y = "Density", colour = "Catch (t)",
+       title = "Analytic lognormal densities (Figure 2 counterpart)") +
+  theme_bw(base_size = 10) +
+  theme(panel.grid.minor = element_blank())
+```
+
+# Rebuild reference points (RebuildAge)
+
+From an equilibrium recovery curve `(initial, TRecover)` and generation time
+`gt`, RebuildAge defines:
+
+- `Tlim` / `Ttrig` — rebuild time in generation times from $B_{lim}=0.3$ /
+  $B_{trigger}=0.46$
+- `Bgt` / `Bgt50` — starting biomass fractions that recover in 1 / 0.5 GT
+
+```{r rebuild-refs}
+# Illustrative curve (replace with rebuildTime() output for a stock)
+rt=data.frame(
+  initial  = seq(0.15, 0.95, by = 0.05),
+  TRecover = 55 * exp(-2.2 * seq(0.15, 0.95, by = 0.05))
+)
+refs=makeRebuildRefs(rt, gt = 12)
+refs
+```
+
+```{r}
+ggplot(rt, aes(initial, TRecover / 12)) +
+  geom_line() +
+  geom_point(aes(x = 0.30, y = refs$Tlim), colour = "red", size = 2) +
+  geom_point(aes(x = 0.46, y = refs$Ttrig), colour = "orange", size = 2) +
+  geom_hline(yintercept = c(0.5, 1), linetype = "dotted") +
+  labs(x = expression(B / B[0]),
+       y = "Rebuild time (generation times)",
+       title = "RebuildAge reference points on a recovery curve") +
+  theme_bw()
+```
+
+# Offline fallback (no SS directory)
+
+When the projection `SSoutput` folder is unavailable, the package tests still
+cover `kobeGreen()` against the published 2024 mako quadrant probabilities:
+
+```{r offline-check}
+sum(sapply(c("green", "red", "yellow", "orange"), function(q)
+  kobeGreen(log(0.95), log(0.72), 0.174, 0.384, -0.652, quadrant = q)))
+kobeGreen(log(0.95), log(0.72), 0.174, 0.384, -0.652)  # green ≈ 0.371
+```
+
+```{r status}
+if (!ssExists)
+  message("SS output not found at ", ssDir,
+          "; Figure 1–2 / Table 1 chunks were skipped.")
+```
+
+# Mapping to SCRS/2026/178
+
+| SCRS item | This vignette | Method |
+|-----------|---------------|--------|
+| Figure 1 trajectories | `ssfTrajectory` / `fTrajectory` + ggplot2 ribbons | Analytic lognormal CI |
+| Figure 2 histograms | Lognormal densities from `kobeMomentGrid` | Analytic (no draws) |
+| Table 1 K2SM | `makeK2SM()` | `pmvnorm` / `pnorm` |
+| Rebuild refs (extra) | `makeRebuildRefs()` | RebuildAge metrics |
