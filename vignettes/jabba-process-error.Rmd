@@ -34,16 +34,26 @@ library(ggplot2)
 # From a JABBA fit
 
 After fitting with `runJABBA()` / `jabba()`, process deviations are in
-`fit$timeseries[,"mu","procB"]`.
+`fit$timeseries[,"mu","procB"]`. Use `proc.dyn = TRUE` to scale process SD
+by \(B/B_{\mathrm{MSY}}\) (\(\sigma_t = \sigma \times \mathrm{relsig}(B/B_{\mathrm{MSY}})\)).
 
 ```{r jabba-ts, eval=FALSE}
-fit <- runJABBA(stk, method = "ices", quick = TRUE)
-jbTs <- jabbaTs(fit)
+fit   <- runJABBA(stk, eq, index = ebiomass, quick = TRUE)
+fitPE <- runJABBA(stk, eq, index = ebiomass, proc.dyn = TRUE, quick = TRUE)
+
+jbTs   <- jabbaTs(fit)
+jbTsPE <- jabbaTs(fitPE)
 names(jbTs)
 # stock harvest bbmsy ffmsy pe sprod
+
+plotPe(jbTs)
+plotPe(jbTsPE)
+
+plotJabbaTs(fit)
+plotJabbaTs(list(JABBA = fit, `JABBA-PE` = fitPE), qname = "bbmsy")
 ```
 
-`jabbaTs()` maps:
+`jabbaTs()` maps medians. `jabbaTsCI()` / `plotJabbaTs()` add JABBA's 95% credible intervals (`lci`/`uci`):
 
 | FLQuants name | JABBA quantity |
 |---------------|----------------|
@@ -100,5 +110,6 @@ residuals.
 # See also
 
 - `vignettes/jabba-workflow.Rmd` for fitting
+- `vignettes/ffwd-process-error.Rmd` for the F-forward OM worked example
 - `rod()` / `rodFn()` for STARS regime detection
 - `jabbaPE()` for production-function residuals

@@ -43,5 +43,6 @@ plotPe(ts)
 
 }
 \seealso{
-\code{\link{plotPe}}, \code{\link{jabbaPE}}, \code{\link{rod}}
+\code{\link{jabbaTsCI}}, \code{\link{plotJabbaTs}},
+  \code{\link{plotPe}}, \code{\link{jabbaPE}}, \code{\link{rod}}
 }

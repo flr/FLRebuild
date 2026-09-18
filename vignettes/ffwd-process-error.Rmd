@@ -1,0 +1,146 @@
+---
+title: "Process error from F-forward simulations"
+author: "Laurence T. Kell"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Process error from F-forward simulations}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.5
+)
+```
+
+Worked example: build a life-history OM, project it with `ffwd()` under known
+\(F/F_{\mathrm{MSY}}\) trajectories, recover process-error residuals with
+`pe()`, and fit JABBA with `proc.dyn`.
+
+# Setup
+
+```{r setup}
+library(FLCore)
+library(FLBRP)
+library(FLife)
+library(FLasher)
+library(FLRebuild)
+library(ggplot2)
+set.seed(1)
+nits <- 8
+it   <- 1
+```
+
+# Life-history OM
+
+```{r om}
+par <- lhPar(FLPar(linf = 80))
+eq  <- lhEql(par)
+refpts(eq)[c("msy", "crash"), c("harvest", "ssb", "yield")]
+```
+
+# Constant \(F/F_{\mathrm{MSY}}\)
+
+```{r constant-f}
+stk <- eq
+FLBRP::fbar(stk)[] <- 1
+stk <- as(stk, "FLStock")
+
+mlt <- seq(0.01, 2, length.out = 11)
+stk <- propagate(stk, length(mlt))
+ftar <- (FLCore::fbar(eq) %=% 1) %*%
+  as.FLQuant(mlt, dimnames = list(iter = seq_along(mlt))) *
+  refpts(eq)["msy", "harvest"]
+devs <- rlnorm(1, rec(stk)[, , , , , 1] %=% 0, 0.3)
+
+stk.f <- window(ffwd(stk, fbar = ftar[, -1], sr = eq, deviances = devs),
+                start = 75)
+pe.f  <- pe(stk.f, eq, location = "after", scale = "log")
+
+pe_vs_f <- data.frame(
+  F  = mlt,
+  PE = c(apply(pe.f, 6, function(x) stats::sd(x, na.rm = TRUE)))
+)
+
+ggplot(pe_vs_f, aes(F, PE)) +
+  geom_line() +
+  geom_point() +
+  labs(x = expression(F / F[MSY]), y = "SD(log PE)") +
+  theme_bw()
+```
+
+PE scale rises with \(F\).
+
+# Increasing vs declining \(F\)
+
+```{r trajectories}
+fwd_pe <- function(f_mult, nits, rec_sd = 0.3) {
+  par <- lhPar(FLPar(linf = 80))
+  eq  <- lhEql(par)
+  stk <- eq
+  ftar <- FLQuant(f_mult) * refpts(eq)["msy", "harvest"]
+  fbar(stk) <- ftar
+  stk <- propagate(as(stk, "FLStock"), nits)
+  devs <- rlnorm(nits, rec(stk) %=% 0, rec_sd)
+  stk <- ffwd(stk, fbar = fbar(stk)[, -1], sr = eq, deviances = devs)
+  list(stk = stk, eq = eq,
+       pe = pe(stk, eq, location = "after", scale = "log"))
+}
+
+inc <- fwd_pe(c(rep(0.01, 30), seq(0.01, 2, length.out = 41)), nits)
+dec <- fwd_pe(c(rep(2, 30),    seq(2, 0.01, length.out = 41)), nits)
+```
+
+```{r pe-sd-year}
+sd_by_year <- function(x, start = 25) {
+  y <- apply(window(x, start = start), 2, function(z) stats::sd(z, na.rm = TRUE))
+  df <- as.data.frame(y)
+  names(df)[names(df) == "data"] <- "PE"
+  df
+}
+
+sd_df <- rbind(
+  transform(sd_by_year(inc$pe), trajectory = "Increase"),
+  transform(sd_by_year(dec$pe), trajectory = "Decline")
+)
+
+ggplot(sd_df, aes(year, PE, colour = trajectory)) +
+  geom_line() +
+  labs(x = "Year", y = "SD(log PE)") +
+  theme_bw()
+```
+
+# `plotPe()`
+
+```{r plotpe}
+ts1 <- FLQuants(
+  pe    = iter(inc$pe, it),
+  bbmsy = iter(ssb(inc$stk) %/% refpts(inc$eq)["msy", "ssb"], it)
+)
+plotPe(ts1)
+```
+
+# Fit JABBA
+
+One realisation (`it`) of the increasing-$F$ stock.
+
+```{r jabba, eval = requireNamespace("JABBA", quietly = TRUE)}
+stk.j <- iter(inc$stk, it)
+fit <- runJABBA(stk.j, inc$eq, index = ebiomass, quick = TRUE, nc = 2)
+if (!is.null(fit) && !is.null(fit$timeseries)) {
+  plotPe(jabbaTs(fit))
+  plotJabbaTs(fit)
+  plotJabbaTs(fit, qname = "bbmsy",
+              om = FLQuants(
+                `OM SSB` = ssb(stk.j) %/% refpts(inc$eq)["msy", "ssb"],
+                `OM EB`  = ebiomass(stk.j) %/% c(refptsEB(inc$eq)["msy", "eb"])))
+  jabba2biodyn(fit)
+}
+```
+
+See `vignettes/jabba-workflow.Rmd` for priors and `jabba2biodyn()`.
