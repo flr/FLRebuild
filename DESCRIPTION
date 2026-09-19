@@ -20,7 +20,6 @@ Imports:
     methods,
     TMB (>= 1.7.19),
     ggplot2,
-    ggplotFL,
     plyr,
     dplyr,
     popbio,
@@ -28,6 +27,7 @@ Imports:
     gsl,
     akima,
     data.table,
+    reshape2,
     deSolve,
     Rcpp,
     mvtnorm
@@ -41,4 +41,9 @@ Suggests:
     rmarkdown (>= 2.0),
     patchwork,
     icesdata,
-    r4ss
+    r4ss,
+    kobe,
+    ggplotFL,
+    JABBA
+Remotes:
+    flr/kobe

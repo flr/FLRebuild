@@ -61,6 +61,19 @@ test_that("a zero or missing SD gives NA bounds, not a zero-width interval", {
   expect_true(all(is.na(ci$ratioLo)))
 })
 
+test_that("deterministic ratio = 0 with SE = 0 is a zero-width interval", {
+
+  z <- traj
+  z$ratio <- 0
+  z$ratioSD <- 0
+  z$value <- 0
+  z$valueSD <- 0
+
+  expect_silent(ci <- lognormalCI(z, 0.95))
+  expect_equal(ci$ratioLo, c(0, 0))
+  expect_equal(ci$ratioHi, c(0, 0))
+})
+
 test_that("an absent ratio SD falls back to the absolute basis", {
 
   noRatio <- traj

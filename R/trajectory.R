@@ -365,13 +365,15 @@ setMethod("lognormalCI", signature(object = "data.frame"),
               "narrow; prefer basis = 'ratio'")
   }
 
-  bad <- !is.finite(sd) | sd <= 0 | !is.finite(x) | x <= 0
+  # Deterministic zero (e.g. F = 0 under zero catch): point mass at 0
+  detZero <- is.finite(x) & x == 0 & is.finite(sd) & sd == 0
+  bad <- !detZero & (!is.finite(sd) | sd <= 0 | !is.finite(x) | x <= 0)
   if (any(bad))
     warning(sum(bad), " years have a missing or zero standard error, or a ",
             "non-positive point estimate; their bounds are returned as NA ",
             "rather than as a zero-width interval")
 
-  cv  <- ifelse(bad, NA_real_, sd / x)
+  cv  <- ifelse(bad, NA_real_, ifelse(detZero, 0, sd / x))
   sig <- sqrt(log(1 + cv^2))
 
   build <- function(level) {

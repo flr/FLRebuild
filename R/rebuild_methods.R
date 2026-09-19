@@ -13,7 +13,6 @@
 # rebuild Methods
 # =============================================================================
 
-#' @importFrom FLasher fwd
 #' @rdname rebuild
 #' @export
 setMethod("rebuild", signature(object = "FLBRP"),

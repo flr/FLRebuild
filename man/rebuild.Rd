@@ -51,6 +51,10 @@ Consolidated package for fisheries stock rebuilding analysis.
 Contains functions from FLRebuild and rebuild packages needed 
 for rebuilding analysis workflows.
 }
+\details{
+Import FLCore but keep package-local S4 generics for names whose FLCore
+signatures differ (r, production, msy, fmsy, bmsy, fwd, p).
+}
 \examples{
 # Load the package
 library(rebuild)

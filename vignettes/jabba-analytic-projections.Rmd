@@ -1,5 +1,5 @@
 ---
-title: "Analytic MVLN projections (Stock Synthesis)"
+title: "Analytic catch projections (JABBA)"
 author: "Laurence T. Kell"
 date: "`r Sys.Date()`"
 output:
@@ -9,7 +9,7 @@ output:
     code_folding: hide
 VignetteBuilder: knitr
 vignette: >
-  %\VignetteIndexEntry{Analytic MVLN projections (Stock Synthesis)}
+  %\VignetteIndexEntry{Analytic catch projections (JABBA)}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -22,30 +22,40 @@ knitr::opts_chunk$set(
 
 # Purpose
 
-Analytic catch projections from Stock Synthesis delta-method moments:
-trajectories with lognormal intervals, a Kobe II strategy matrix
-(`makeK2SM()`), year-specific densities, a phase plot, and a recovery curve.
-No Monte Carlo. Plots are ggplot2 except `kobe::kobePhaseMar`.
+Same products as the Stock Synthesis vignette, from a JABBA fit:
+`projectJabba()` catch forecasts, `kobeMomentGridJabba()` log-moments,
+`makeK2SM()`, and `kobeRebuildCurve()`. Intervals use `kobeMomentCI()`
+(same lognormal assumption as `lognormalCI()`).
 
-Set `FLREBUILD_SSDIR` to a folder of `*_{catch}t.Rdata` SS projection runs.
-The defaults below are the 2026 North Atlantic shortfin mako case.
+Set `FLREBUILD_JABBADIR` / `FLREBUILD_JABBARUN`. Defaults are the 2026
+North Atlantic shortfin mako scenario `1-S`.
 
 ```{r setup, warning=FALSE}
-library(FLRebuild)
+if (requireNamespace("pkgload", quietly = TRUE) &&
+    file.exists(file.path("..", "DESCRIPTION"))) {
+  pkgload::load_all("..", quiet = TRUE, export_all = FALSE)
+} else {
+  library(FLRebuild)
+}
 library(ggplot2)
 
-hasKobe <- requireNamespace("kobe", quietly = TRUE)
-ssDir <- Sys.getenv(
-  "FLREBUILD_SSDIR",
-  unset = "P:/rfmo/iccat/2026/SHK/Analysis/NSMA_projection/SSoutput")
-ssExists <- dir.exists(ssDir) &&
-  length(list.files(ssDir, pattern = "_[0-9]+t\\.Rdata$", ignore.case = TRUE)) > 0
+hasKobe  <- requireNamespace("kobe", quietly = TRUE)
+hasJabba <- requireNamespace("JABBA", quietly = TRUE)
+jabbaDir <- Sys.getenv(
+  "FLREBUILD_JABBADIR",
+  unset = paste0(
+    "P:/rfmo/iccat/2026/SHK/Analysis/final assessment results/",
+    "JABBA/final3JABBA/outputCorrected"))
+jabbaRun <- Sys.getenv("FLREBUILD_JABBARUN", unset = "1-S")
+jabbaExists <- hasJabba && dir.exists(jabbaDir) &&
+  file.exists(file.path(jabbaDir, paste0("SMA2026_", jabbaRun, "_jabba.rdata")))
 
 k2Yrs   <- c(2027, 2028, 2029, 2030, 2035, 2040, 2045,
              2050, 2055, 2060, 2065, 2070)
 fig2Yrs <- c(2026, 2028, 2030, 2050, 2070)
 annYrs  <- 2025:2070
 tacsFig <- c(0, 250, 1200, 1883, 2300)
+tacs    <- sort(unique(c(tacsFig, seq(0, 2300, by = 100))))
 LEVELS  <- c(0.5, 0.8, 0.95)
 
 theme_kobe <- theme_bw(base_size = 10) +
@@ -54,46 +64,61 @@ alpha_levels <- scale_alpha_manual(
   values = c("0.5" = 0.35, "0.8" = 0.22, "0.95" = 0.12), name = "Level")
 ```
 
-```{r load-runs, eval=ssExists}
-runs <- getRuns(ssDir)
+```{r load-project, eval=jabbaExists}
+remoteFit <- file.path(jabbaDir, paste0("SMA2026_", jabbaRun, "_jabba.rdata"))
+localFit  <- file.path(tempdir(), basename(remoteFit))
+if (!file.exists(localFit) ||
+    !identical(unname(file.info(localFit)$size), unname(file.info(remoteFit)$size)))
+  stopifnot(file.copy(remoteFit, localFit, overwrite = TRUE))
+
+fit <- getRuns(setNames(localFit, jabbaRun), source = "jabba")[[jabbaRun]]
+termYr <- max(fit$kbtrj$year, na.rm = TRUE)
+prj <- projectJabba(fit, catch = tacs, nyears = 2070L - termYr,
+                    imp.yr = 3, thin = 10, prjOnly = TRUE)
 ```
 
 # Trajectories
 
-`ssfTrajectory()` / `fTrajectory()` plus `lognormalCI()` at 50 / 80 / 95%.
+JABBA `kbtrj` through the terminal year, then `projectJabba()` forecasts.
+Ribbons from `kobeMomentCI()` at 50 / 80 / 95%.
 
-```{r fig1-data, eval=ssExists}
-pick <- intersect(as.character(tacsFig), names(runs))
-bindCI <- function(FUN) {
-  out <- do.call(rbind, lapply(pick, function(nm)
-    transform(lognormalCI(FUN(runs[[nm]]), levels = LEVELS),
-              catch = as.numeric(nm))))
-  transform(out, catch = factor(catch, levels = as.numeric(pick)))
-}
-ssbCI <- bindCI(ssfTrajectory)
-fCI   <- bindCI(fTrajectory)
+```{r fig1-data, eval=jabbaExists}
+kbH <- jabbaKbtrj(fit, yearMax = termYr)
+histFig <- do.call(rbind, lapply(tacsFig, function(c0) {
+  x <- kbH[, c("year", "stock", "harvest")]
+  x$catch <- c0
+  x
+}))
+figTrj <- rbind(histFig, prj[prj$catch %in% tacsFig, names(histFig)])
+gridFig <- kobeMomentGridJabba(figTrj, years = sort(unique(figTrj$year)))
+ssbCI <- transform(kobeMomentCI(gridFig, "B", LEVELS),
+                   catch = factor(catch, levels = tacsFig))
+fCI   <- transform(kobeMomentCI(gridFig, "F", LEVELS),
+                   catch = factor(catch, levels = tacsFig))
 ssbMed <- ssbCI[ssbCI$level == 0.5, ]
 fMed   <- fCI[fCI$level == 0.5, ]
 ```
 
-```{r fig1-ssf, eval=ssExists, fig.height=3}
+```{r fig1-ssf, eval=jabbaExists, fig.height=3}
 ggplot(ssbCI, aes(year, ratio)) +
   geom_ribbon(aes(ymin = ratioLo, ymax = ratioHi, alpha = factor(level)),
               fill = "#1b9e77") +
   geom_line(data = ssbMed, linewidth = 0.7) +
   geom_hline(yintercept = 1, linetype = "dashed", colour = "grey40") +
   geom_hline(yintercept = 0.4, linetype = "3313", colour = "red4") +
+  geom_vline(xintercept = termYr + 0.5, linetype = "dotted", colour = "grey50") +
   facet_wrap(~catch, nrow = 1, labeller = label_both) +
-  labs(x = NULL, y = expression(SSF / SSF[MSY])) +
+  labs(x = NULL, y = expression(B / B[MSY])) +
   coord_cartesian(ylim = c(0, 3)) + alpha_levels + theme_kobe
 ```
 
-```{r fig1-f, eval=ssExists, fig.height=3}
+```{r fig1-f, eval=jabbaExists, fig.height=3}
 ggplot(fCI, aes(year, ratio)) +
   geom_ribbon(aes(ymin = ratioLo, ymax = ratioHi, alpha = factor(level)),
               fill = "#d95f02") +
   geom_line(data = fMed, linewidth = 0.7) +
   geom_hline(yintercept = 1, linetype = "dashed", colour = "grey40") +
+  geom_vline(xintercept = termYr + 0.5, linetype = "dotted", colour = "grey50") +
   facet_wrap(~catch, nrow = 1, labeller = label_both) +
   labs(x = NULL, y = expression(F / F[MSY])) +
   coord_cartesian(ylim = c(0, 5)) + alpha_levels + theme_kobe
@@ -101,14 +126,11 @@ ggplot(fCI, aes(year, ratio)) +
 
 # Kobe II strategy matrix
 
-`makeK2SM()`: \(P(F\le F_{MSY})\), \(P(SSF\ge SSF_{MSY})\), green.
-
-```{r table1, eval=ssExists, fig.height=12, fig.width=6, warning=FALSE}
-k2 <- suppressWarnings(
-  makeK2SM(runs, years = k2Yrs, transform = "exact"))
+```{r table1, eval=jabbaExists, fig.height=12, fig.width=6, warning=FALSE}
+k2 <- makeK2SM(kobeMomentGridJabba(prj, years = k2Yrs), years = k2Yrs)
 k2sm <- rbind(
   cbind(k2$long, panel = "P(F <= Fmsy)", p = k2$long$pNoOverfishing),
-  cbind(k2$long, panel = "P(SSF >= SSFmsy)", p = k2$long$pNotOverfished),
+  cbind(k2$long, panel = "P(B >= Bmsy)", p = k2$long$pNotOverfished),
   cbind(k2$long, panel = "P(green)", p = k2$long$green))
 k2sm$panel <- factor(k2sm$panel, unique(k2sm$panel))
 k2sm$catch <- factor(k2sm$catch, sort(unique(k2sm$catch)))
@@ -128,22 +150,18 @@ ggplot(k2sm, aes(year, catch, fill = p)) +
 
 # Densities
 
-Lognormal densities from the same moments (no draws). \(F = 0\) omits \(F/F_{MSY}\).
-
-```{r fig2, eval=ssExists, fig.height=2.5, warning=FALSE}
-grid2 <- suppressWarnings(
-  kobeMomentGrid(runs[as.character(tacsFig)], years = fig2Yrs,
-                 transform = "exact"))
+```{r fig2, eval=jabbaExists, fig.height=2.5}
+grid2 <- kobeMomentGridJabba(prj[prj$catch %in% tacsFig, ], years = fig2Yrs)
 dens_df <- do.call(rbind, lapply(seq_len(nrow(grid2)), function(i) {
   g <- grid2[i, ]
   out <- list()
   if (is.finite(g$sigmaB) && g$sigmaB > 0)
     out[[1]] <- data.frame(
-      catch = g$catch, year = g$year, quantity = "SSF/SSFmsy",
+      catch = g$catch, year = g$year, quantity = "B/Bmsy",
       x = exp(seq(log(0.2), log(3), length.out = 200)),
       dens = dlnorm(exp(seq(log(0.2), log(3), length.out = 200)),
                     g$muB, g$sigmaB))
-  if (is.finite(g$sigmaF) && g$sigmaF > 0)
+  if (is.finite(g$sigmaF) && g$sigmaF > 0 && is.finite(exp(g$muF)))
     out[[2]] <- data.frame(
       catch = g$catch, year = g$year, quantity = "F/Fmsy",
       x = exp(seq(log(0.05), log(4), length.out = 200)),
@@ -153,17 +171,17 @@ dens_df <- do.call(rbind, lapply(seq_len(nrow(grid2)), function(i) {
 }))
 ```
 
-```{r fig2-ssf, eval=ssExists, fig.height=2.5}
-ggplot(subset(dens_df, quantity == "SSF/SSFmsy"),
+```{r fig2-ssf, eval=jabbaExists, fig.height=2.5}
+ggplot(subset(dens_df, quantity == "B/Bmsy"),
        aes(x, dens, colour = factor(catch))) +
   geom_line(linewidth = 0.6) +
   geom_vline(xintercept = 1, linetype = "dashed", colour = "grey50") +
   facet_wrap(~year, nrow = 1, scales = "free_y") + scale_x_log10() +
-  labs(x = expression(SSF / SSF[MSY]), y = "Density", colour = "Catch (t)") +
+  labs(x = expression(B / B[MSY]), y = "Density", colour = "Catch (t)") +
   theme_kobe
 ```
 
-```{r fig2-f, eval=ssExists, fig.height=2.5}
+```{r fig2-f, eval=jabbaExists, fig.height=2.5}
 ggplot(subset(dens_df, quantity == "F/Fmsy"),
        aes(x, dens, colour = factor(catch))) +
   geom_line(linewidth = 0.6) +
@@ -175,30 +193,24 @@ ggplot(subset(dens_df, quantity == "F/Fmsy"),
 
 # Phase plot
 
-800 draws per catch in 2070 from `kobeDraws()`, plotted with `kobe::kobePhaseMar`.
-
-```{r kobe-phase-mar, eval=ssExists && hasKobe, fig.height=6, fig.width=6, warning=FALSE}
+```{r kobe-phase-mar, eval=jabbaExists && hasKobe, fig.height=6, fig.width=6, warning=FALSE}
 library(kobe)
-g2070 <- suppressWarnings(
-  kobeMomentGrid(runs[as.character(tacsFig)], years = 2070, transform = "exact"))
+g2070 <- kobeMomentGridJabba(prj[prj$catch %in% tacsFig, ], years = 2070)
 kobe::kobePhaseMar(kobeDraws(g2070, n = 800, seed = 2070),
-                   xlab = expression(SSF / SSF[MSY]),
+                   xlab = expression(B / B[MSY]),
                    ylab = expression(F / F[MSY]))
 ```
 
-```{r kobe-phase-fallback, eval=ssExists && !hasKobe}
+```{r kobe-phase-fallback, eval=jabbaExists && !hasKobe}
 message("Install kobe (github.com/flr/kobe) for kobePhaseMar.")
 ```
 
 # Recovery curve
 
-Last year \(P(\mathrm{green})\) stays at 0.50 or 0.60, by catch
-(`kobeRebuildCurve()` on the annual moment grid).
+Last year \(P(\mathrm{green})\) stays at 0.50 or 0.60, by catch.
 
-```{r rebuild, eval=ssExists, fig.height=3.5, warning=FALSE}
-gridAnn <- suppressWarnings(
-  kobeMomentGrid(runs, years = annYrs, transform = "exact"))
-tacs <- sort(as.numeric(names(runs)))
+```{r rebuild, eval=jabbaExists, fig.height=3.5, warning=FALSE}
+gridAnn <- kobeMomentGridJabba(prj, years = annYrs)
 curve <- kobeRebuildCurve(gridAnn, catch = tacs, years = annYrs,
                           target = c(0.50, 0.60))
 ggplot(curve, aes(catch, rebuildYear, colour = factor(target))) +
@@ -208,6 +220,6 @@ ggplot(curve, aes(catch, rebuildYear, colour = factor(target))) +
 ```
 
 ```{r status}
-if (!ssExists)
-  message("SS output not found at ", ssDir, "; projection chunks skipped.")
+if (!jabbaExists)
+  message("Need JABBA + fit at ", jabbaDir, "; projection chunks skipped.")
 ```

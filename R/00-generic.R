@@ -1,7 +1,9 @@
 # =============================================================================
 # Core Generic Functions
 # =============================================================================
-#' @import FLCore
+#' Import FLCore but keep package-local S4 generics for names whose FLCore
+#' signatures differ (r, production, msy, fmsy, bmsy, fwd, p).
+#' @rawNamespace import(FLCore, except = c(r, production, msy, fmsy, bmsy, fwd, p))
 #' 
 #' @title Rebuild Trajectories
 #' 
@@ -339,3 +341,34 @@ setGeneric("benchmark", function(object, ...) standardGeneric("benchmark"))
 #' @return An \code{FLPar} (single stock) or a data.frame (several stocks)
 #' @export
 setGeneric("fishlife", function(object, ...) standardGeneric("fishlife"))
+
+# =============================================================================
+# Assessment / projection run loaders
+# =============================================================================
+
+#' Load assessment or projection runs
+#'
+#' S4 generic for named lists of Stock Synthesis projection outputs or JABBA
+#' assessment fits. \code{character} methods take a directory or a named vector
+#' of paths; \code{list} methods validate an already-loaded collection.
+#' Source is chosen with \code{source} (\code{"ss"}, \code{"jabba"}, or
+#' \code{"auto"}). Auto-detection uses SS catch-level names / \code{*_\\{catch\\}t.Rdata}
+#' files versus JABBA run labels / \code{*_jabba.rdata} files.
+#'
+#' @param object Named character vector of paths, a directory, or a named list
+#'   of loaded run objects.
+#' @param ... Passed to methods (\code{pattern}, \code{runs}, \code{source}).
+#' @return A named list of run objects (SS_output-shaped or JABBA fits).
+#' @examples
+#' \dontrun{
+#' runs <- getRuns(c(
+#'   "0" = "path/to/HW2e_..._0t.Rdata",
+#'   "250" = "path/to/HW2e_..._250t.Rdata"))
+#' runs <- getRuns("P:/.../SSoutput")
+#' jb   <- getRuns("P:/.../outputCorrected", source = "jabba",
+#'                 runs = c("1-B", "1-S", "2-S"))
+#' }
+#' @seealso \code{\link{getJabbaRuns}}, \code{\link{kobeMomentGrid}},
+#'   \code{\link{kobeMomentGridJabba}}, \code{\link{makeK2SM}}
+#' @export
+setGeneric("getRuns", function(object, ...) standardGeneric("getRuns"))

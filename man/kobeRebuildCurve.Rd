@@ -15,11 +15,12 @@ kobeRebuildCurve(grid, catch, years = NULL, target = 0.6)
 Supply the full annual sequence, not the years of a strategy matrix, since
 coarse year spacing determines the resolution of the crossing.}
 
-\item{target}{Target probability.}
+\item{target}{Target probability, or a vector of targets.}
 }
 \value{
 A \code{data.frame} with \code{catch} and the columns returned by
-  \code{\link{kobeRebuildTime}}.
+  \code{\link{kobeRebuildTime}}. One row per catch (and per \code{target}
+  when several targets are supplied).
 }
 \description{
 Applies \code{\link{kobeRebuildTime}} to each catch level of a moment grid,
@@ -28,9 +29,9 @@ interpolating the moments where a catch level was not run.
 \examples{
 \dontrun{
 grid  <- kobeMomentGrid(runs, 2025:2070)
-curve <- kobeRebuildCurve(grid, seq(0, 1800, by = 25), target = 0.60)
+curve <- kobeRebuildCurve(grid, seq(0, 1800, by = 25), target = c(0.50, 0.60))
 plot(curve$catch, curve$rebuildYear, type = "l",
-     xlab = "Total removals (t)", ylab = "Year P(green) >= 0.60")
+     xlab = "Total removals (t)", ylab = "Year P(green) >= target")
 }
 }
 \seealso{

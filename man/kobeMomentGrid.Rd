@@ -20,7 +20,8 @@ natural-scale one.}
 \value{
 A \code{data.frame} with \code{catch}, \code{year}, \code{muB},
   \code{muF}, \code{sigmaB}, \code{sigmaF}, \code{rhoLog} and
-  \code{feasible}.
+  \code{feasible}. Zero-catch years with \eqn{F = 0} use \code{muF = -Inf}
+  and \code{sigmaF = 0}.
 }
 \description{
 Assembles the bivariate normal moments of \eqn{\log(SSB/SSB_{MSY})} and
@@ -40,9 +41,13 @@ interpolating across runs that differ in other respects mixes distinct
 models.
 
 Run x year combinations with missing moments are retained as \code{NA} and
-reported through a warning. The usual cause is a zero or absent standard
-error on a forecast-year \code{F_} label, which would otherwise produce a
-probability of exactly one.
+reported through a single warning. Usual causes are a missing label or a
+zero / absent standard error on a positive forecast-year \code{F_} or
+\code{Bratio_} value. Deterministic \eqn{F = 0} under zero catch is handled
+separately and is not treated as missing. When the exact lognormal transform
+implies \eqn{|\rho_{\log}| \ge 1}, the correlation is clamped to
+\eqn{\pm(1 - 10^{-8})} so quadrant probabilities remain defined
+(\code{feasible = FALSE} flags those cells).
 }
 \examples{
 \dontrun{

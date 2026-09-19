@@ -30,7 +30,6 @@
 #' }
 #'
 #' @importFrom FLCore fbar  ssb catch metrics model.frame refpts
-#' @importFrom reshape2 melt
 #' @importFrom methods setMethod
 #'
 #' @export
@@ -47,8 +46,8 @@ setMethod("msyVirgin", signature(object="FLBRP"),
             fbar(object) = fbar(object)[,1:2]
             fbar(object)[] = c(1e-12, refpts(object)["msy","harvest"])
             
-            # Calculate metrics
-            rtn = melt(t(model.frame(metrics(object, 
+            # Calculate metrics (reshape2::melt keeps the historical column layout)
+            rtn = reshape2::melt(t(model.frame(metrics(object, 
                                              list(f = fbar,
                                                   ssb = ssb,
                                                   catch = function(x) catch(x),

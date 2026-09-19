@@ -27,7 +27,9 @@ overfishing) or \code{"orange"} (not overfished, overfishing).}
 }
 \value{
 Numeric probability, or \code{NA_real_} if any moment is not finite
-  or the correlation is not inside \eqn{(-1, 1)}.
+  or a standard deviation is non-positive. Correlations with
+  \eqn{|\rho| \ge 1} are clamped to the attainable boundary rather than
+  returning \code{NA}.
 }
 \description{
 Evaluates the probability that a stock lies in a Kobe quadrant as an orthant

@@ -258,7 +258,7 @@ sscor <- function(covar) {
 #' @seealso \code{\link{kobeProbs}} for the analytic equivalent,
 #'   \code{\link{kobeMomentGrid}} for the exact covariance transform
 #' @importFrom mvtnorm rmvnorm
-#' @importFrom data.table data.table melt tstrsplit setnames
+#' @importFrom data.table data.table tstrsplit setnames
 #' @export
 ssmvln <- function(covar, hat, mc = 5000, new = !FALSE, method = "svd") {
 
@@ -502,9 +502,11 @@ kobe_probs_mvln <- function(ss_out, year = NULL, new = FALSE) {
 
 #' Extract an MLE and standard error from derived_quants
 #'
-#' Missing, zero or non-finite standard errors return \code{NA} with a warning
-#' rather than zero. A zero variance forces a degenerate probability of exactly
-#' 0 or 1, which is indistinguishable from a genuine result once tabulated.
+#' Returns the raw point estimate and standard error. Non-positive values
+#' (common for \code{F_} under zero catch) and non-positive standard errors are
+#' not warned about here: \code{\link{kobeMoments}} treats deterministic
+#' \eqn{F = 0} as a valid special case, and \code{\link{kobeMomentGrid}}
+#' summarises any remaining incomplete run x year cells in a single warning.
 #'
 #' @param dq \code{derived_quants} element of an \code{\link[r4ss]{SS_output}}
 #'   object.
@@ -522,29 +524,40 @@ kobeHat <- function(dq, label) {
     return(c(value = NA_real_, se = NA_real_))
   }
 
-  v  <- as.numeric(dq$value[i])
-  se <- as.numeric(dq$stddev[i])
+  c(value = as.numeric(dq$value[i]), se = as.numeric(dq$stddev[i]))
+}
 
-  if (!is.finite(v) || v <= 0) {
-    warning("non-positive or non-finite value for ", label)
-    return(c(value = NA_real_, se = NA_real_))
-  }
+#' Marginal P(F <= Fmsy) from log-scale moments
+#'
+#' Handles the deterministic zero-F encoding \code{muF = -Inf}, \code{sigmaF = 0}
+#' used for zero-catch projections.
+#'
+#' @keywords internal
+#' @noRd
+kobePNoOverfishing <- function(muF, sigmaF) {
+  if (isTRUE(sigmaF == 0) && is.infinite(muF) && muF < 0)
+    return(1)
+  if (!is.finite(muF) || !is.finite(sigmaF) || sigmaF <= 0)
+    return(NA_real_)
+  stats::pnorm(0, muF, sigmaF)
+}
 
-  if (!is.finite(se) || se <= 0) {
-    warning("missing or zero standard error for ", label,
-            ": the log-scale variance would be zero, giving a probability of ",
-            "exactly 0 or 1")
-    return(c(value = v, se = NA_real_))
-  }
-
-  c(value = v, se = se)
+#' Marginal P(SSB >= SSBmsy) from log-scale moments
+#'
+#' @keywords internal
+#' @noRd
+kobePNotOverfished <- function(muB, sigmaB) {
+  if (!is.finite(muB) || !is.finite(sigmaB) || sigmaB <= 0)
+    return(NA_real_)
+  1 - stats::pnorm(0, muB, sigmaB)
 }
 
 #' Correlation between two derived quantities
 #'
-#' An absent pair returns \code{NA} with a warning. Setting an unknown
-#' correlation to zero silently changes the model and can render the covariance
-#' matrix indefinite.
+#' An absent pair returns \code{NA} without a per-pair warning (missing cells
+#' are summarised by \code{\link{kobeMomentGrid}}). Setting an unknown
+#' correlation to zero silently would change the model and can render the
+#' covariance matrix indefinite, so the value remains \code{NA}.
 #'
 #' @param covar \code{CoVar} element of an \code{\link[r4ss]{SS_output}} object.
 #' @param labelI,labelJ Character labels of the two quantities.
@@ -558,11 +571,8 @@ kobeRho <- function(covar, labelI, labelJ) {
   hit <- which((covar$label.i == labelI & covar$label.j == labelJ) |
                (covar$label.i == labelJ & covar$label.j == labelI))
 
-  if (length(hit) == 0) {
-    warning("no CoVar entry for ", labelI, " x ", labelJ,
-            ": the correlation is unknown, not zero")
+  if (length(hit) == 0)
     return(NA_real_)
-  }
 
   as.numeric(covar$corr[hit[1]])
 }
@@ -607,37 +617,66 @@ kobeMoments <- function(dq, covar, year,
 
   transform <- match.arg(transform)
 
-  b   <- kobeHat(dq, labB)
-  f   <- kobeHat(dq, labF)
-  rho <- kobeRho(covar, labB, labF)
+  b <- kobeHat(dq, labB)
+  f <- kobeHat(dq, labF)
 
   empty <- list(mu = c(NA_real_, NA_real_), Sigma = matrix(NA_real_, 2, 2),
                 sigmaB = NA_real_, sigmaF = NA_real_, rhoLog = NA_real_,
                 feasible = NA, year = year, bratio = NA_real_,
                 fratio = NA_real_)
 
-  if (any(is.na(c(b, f, rho)))) return(empty)
+  # Biomass must be positive with a usable SE for any lognormal treatment
+  if (!is.finite(b["value"]) || b["value"] <= 0 ||
+      !is.finite(b["se"]) || b["se"] <= 0)
+    return(empty)
 
   cvB <- b["se"] / b["value"]
-  cvF <- f["se"] / f["value"]
-
   s2B <- log(1 + cvB^2)
-  s2F <- log(1 + cvF^2)
   sB  <- sqrt(s2B)
+
+  # Deterministic F = 0 (zero-catch projections): MVLN on F is undefined, but
+  # P(F <= Fmsy) = 1 and the green probability collapses to P(B >= Bmsy).
+  # Encode as muF = -Inf, sigmaF = 0 (see kobeGreen / kobePNoOverfishing).
+  if (is.finite(f["value"]) && f["value"] <= 0)
+    return(list(mu = c(unname(log(b["value"])), -Inf),
+                Sigma = matrix(c(s2B, 0, 0, 0), 2, 2),
+                sigmaB = sB, sigmaF = 0, rhoLog = 0, feasible = TRUE,
+                year = year, bratio = unname(b["value"]),
+                fratio = unname(f["value"])))
+
+  if (!is.finite(f["value"]) || f["value"] <= 0 ||
+      !is.finite(f["se"]) || f["se"] <= 0)
+    return(empty)
+
+  rho <- kobeRho(covar, labB, labF)
+  if (is.na(rho)) return(empty)
+
+  cvF <- f["se"] / f["value"]
+  s2F <- log(1 + cvF^2)
   sF  <- sqrt(s2F)
 
-  covLog <- switch(transform,
-    exact   = log(1 + rho * cvB * cvF),
-    current = rho * sB * sF)
+  # Exact: cov = log(1 + rho*CV_B*CV_F). Guard the log argument — if
+  # 1 + rho*CV_B*CV_F <= 0 the natural-scale (rho, CV) pair is impossible
+  # for a bivariate lognormal (same as |rho_log| >= 1 below).
+  if (identical(transform, "exact")) {
+    arg <- 1 + rho * cvB * cvF
+    covLog <- if (is.finite(arg) && arg > 0) log(arg) else NA_real_
+  } else {
+    covLog <- rho * sB * sF
+  }
 
-  rhoLog   <- covLog / (sB * sF)
+  rhoLog <- covLog / (sB * sF)
+  # Exact transform can also imply |rho_log| >= 1 even when arg > 0 (high
+  # catch, late years). Clamp to the Frechet–Hoeffding boundary so quadrant
+  # probabilities stay defined; flag feasible = FALSE for diagnostics.
   feasible <- is.finite(rhoLog) && abs(rhoLog) < 1
-
-  if (!feasible)
-    warning("year ", year, ": implied log-scale correlation ",
-            round(rhoLog, 3), " lies outside (-1, 1); the reported ",
-            "natural-scale correlation and CVs are not jointly attainable ",
-            "for a bivariate lognormal")
+  if (!feasible) {
+    if (!is.finite(rhoLog) || rhoLog == 0)
+      rhoLog <- if (is.finite(rho) && rho < 0) -(1 - 1e-8) else (1 - 1e-8)
+    else
+      rhoLog <- sign(rhoLog) * (1 - 1e-8)
+    covLog <- rhoLog * sB * sF
+  }
 
   list(mu = c(unname(log(b["value"])), unname(log(f["value"]))),
        Sigma = matrix(c(s2B, covLog, covLog, s2F), 2, 2),
@@ -671,7 +710,9 @@ kobeMoments <- function(dq, covar, year,
 #'   \code{"red"} (overfished and overfishing), \code{"yellow"} (overfished, no
 #'   overfishing) or \code{"orange"} (not overfished, overfishing).
 #' @return Numeric probability, or \code{NA_real_} if any moment is not finite
-#'   or the correlation is not inside \eqn{(-1, 1)}.
+#'   or a standard deviation is non-positive. Correlations with
+#'   \eqn{|\rho| \ge 1} are clamped to the attainable boundary rather than
+#'   returning \code{NA}.
 #' @examples
 #' # 2026 North Atlantic shortfin mako terminal year, moments implied by the
 #' # reported point probabilities
@@ -697,8 +738,22 @@ kobeGreen <- function(muB, muF, sigmaB, sigmaF, rho,
 
   quadrant <- match.arg(quadrant)
 
+  # Deterministic F = 0 (zero-catch projections): collapse to the biomass margin
+  if (isTRUE(sigmaF == 0) && is.infinite(muF) && muF < 0) {
+    pBhi <- kobePNotOverfished(muB, sigmaB)
+    if (is.na(pBhi)) return(NA_real_)
+    return(switch(quadrant,
+      green  = pBhi,
+      yellow = 1 - pBhi,
+      red    = 0,
+      orange = 0))
+  }
+
   if (any(!is.finite(c(muB, muF, sigmaB, sigmaF, rho)))) return(NA_real_)
-  if (abs(rho) >= 1 || sigmaB <= 0 || sigmaF <= 0) return(NA_real_)
+  if (sigmaB <= 0 || sigmaF <= 0) return(NA_real_)
+  # Boundary correlation when |rho| >= 1 (see kobeMoments clamping)
+  if (abs(rho) >= 1)
+    rho <- sign(rho) * (1 - 1e-8)
 
   Sigma <- matrix(c(sigmaB^2, rho * sigmaB * sigmaF,
                     rho * sigmaB * sigmaF, sigmaF^2), 2, 2)
@@ -752,14 +807,16 @@ kobeProbs <- function(dq, covar, year, transform = c("exact", "current")) {
                       pNoOverfishing = NA_real_, green = NA_real_,
                       red = NA_real_, yellow = NA_real_, orange = NA_real_)
 
-  if (any(is.na(m$mu))) return(empty)
+  if (is.na(m$mu[1]) || (!(is.infinite(m$mu[2]) && m$mu[2] < 0 &&
+                            isTRUE(m$sigmaF == 0)) && is.na(m$mu[2])))
+    return(empty)
 
   q <- function(w) kobeGreen(m$mu[1], m$mu[2], m$sigmaB, m$sigmaF, m$rhoLog, w)
 
   data.frame(year = year,
              sigmaLogB = m$sigmaB, sigmaLogF = m$sigmaF, rhoLog = m$rhoLog,
-             pNotOverfished = 1 - stats::pnorm(0, m$mu[1], m$sigmaB),
-             pNoOverfishing = stats::pnorm(0, m$mu[2], m$sigmaF),
+             pNotOverfished = kobePNotOverfished(m$mu[1], m$sigmaB),
+             pNoOverfishing = kobePNoOverfishing(m$mu[2], m$sigmaF),
              green = q("green"), red = q("red"),
              yellow = q("yellow"), orange = q("orange"))
 }
@@ -782,9 +839,13 @@ kobeProbs <- function(dq, covar, year, transform = c("exact", "current")) {
 #' models.
 #'
 #' Run x year combinations with missing moments are retained as \code{NA} and
-#' reported through a warning. The usual cause is a zero or absent standard
-#' error on a forecast-year \code{F_} label, which would otherwise produce a
-#' probability of exactly one.
+#' reported through a single warning. Usual causes are a missing label or a
+#' zero / absent standard error on a positive forecast-year \code{F_} or
+#' \code{Bratio_} value. Deterministic \eqn{F = 0} under zero catch is handled
+#' separately and is not treated as missing. When the exact lognormal transform
+#' implies \eqn{|\rho_{\log}| \ge 1}, the correlation is clamped to
+#' \eqn{\pm(1 - 10^{-8})} so quadrant probabilities remain defined
+#' (\code{feasible = FALSE} flags those cells).
 #'
 #' @param runs Named list of \code{\link[r4ss]{SS_output}} objects, one per
 #'   catch level. Names must be the catch levels and coercible to numeric.
@@ -795,7 +856,8 @@ kobeProbs <- function(dq, covar, year, transform = c("exact", "current")) {
 #'   natural-scale one.
 #' @return A \code{data.frame} with \code{catch}, \code{year}, \code{muB},
 #'   \code{muF}, \code{sigmaB}, \code{sigmaF}, \code{rhoLog} and
-#'   \code{feasible}.
+#'   \code{feasible}. Zero-catch years with \eqn{F = 0} use \code{muF = -Inf}
+#'   and \code{sigmaF = 0}.
 #' @examples
 #' \dontrun{
 #' runs <- list("0" = ss0, "250" = ss250, "1000" = ss1000, "1500" = ss1500)
@@ -830,13 +892,23 @@ kobeMomentGrid <- function(runs, years, transform = c("exact", "current")) {
   out <- out[order(out$catch, out$year), ]
   rownames(out) <- NULL
 
-  bad <- !stats::complete.cases(
-    out[, c("muB", "muF", "sigmaB", "sigmaF", "rhoLog")])
+  # Zero-F rows use muF = -Inf (not NA); flag only genuine missing moments
+  zeroF <- out$sigmaF == 0 & is.infinite(out$muF) & out$muF < 0
+  bad <- is.na(out$muB) | is.na(out$sigmaB) | is.na(out$rhoLog) |
+    (!zeroF & (is.na(out$muF) | is.na(out$sigmaF) | (!is.na(out$sigmaF) & out$sigmaF <= 0)))
 
   if (any(bad))
-    warning(sum(bad), " run x year combinations have missing moments. ",
-            "Check for zero or absent standard errors on forecast-year ",
-            "F_ labels.")
+    warning(sum(bad), " run x year combinations have missing moments ",
+            "(non-positive Bratio/F with no zero-F encoding, or missing SE). ",
+            "Probabilities for those cells are NA.")
+
+  # One summary for delta-method (rho, CV) pairs that are not jointly attainable
+  infeas <- !is.na(out$feasible) & !out$feasible
+  if (any(infeas))
+    warning(sum(infeas), " run x year combinations have implied log-scale ",
+            "correlation outside (-1, 1); natural-scale correlation and CVs ",
+            "are not jointly attainable for a bivariate lognormal. ",
+            "Correlation was clamped to ±(1 - 1e-8) so K2SM cells stay defined.")
 
   out
 }
@@ -912,6 +984,17 @@ kobeInterp <- function(grid, catch, years = NULL,
     sb <- interp1(g$catch, g$sigmaB, catch)
     sf <- interp1(g$catch, g$sigmaF, catch)
     rl <- interp1(g$catch, g$rhoLog, catch)
+    # Fitted TAC rows are used as-is (keeps deterministic F = 0 / muF = -Inf)
+    i <- match(catch, g$catch)
+    hit <- !is.na(i)
+    if (any(hit)) {
+      ii <- i[hit]
+      mb[hit] <- g$muB[ii]
+      mf[hit] <- g$muF[ii]
+      sb[hit] <- g$sigmaB[ii]
+      sf[hit] <- g$sigmaF[ii]
+      rl[hit] <- g$rhoLog[ii]
+    }
     data.frame(catch = catch, year = y,
                muB = mb, muF = mf, sigmaB = sb, sigmaF = sf, rhoLog = rl,
                green = mapply(kobeGreen, mb, mf, sb, sf, rl,
@@ -1018,19 +1101,27 @@ kobeRebuildTime <- function(prob, target = 0.6) {
 #' @param years Numeric vector of years; defaults to all years in \code{grid}.
 #'   Supply the full annual sequence, not the years of a strategy matrix, since
 #'   coarse year spacing determines the resolution of the crossing.
-#' @param target Target probability.
+#' @param target Target probability, or a vector of targets.
 #' @return A \code{data.frame} with \code{catch} and the columns returned by
-#'   \code{\link{kobeRebuildTime}}.
+#'   \code{\link{kobeRebuildTime}}. One row per catch (and per \code{target}
+#'   when several targets are supplied).
 #' @examples
 #' \dontrun{
 #' grid  <- kobeMomentGrid(runs, 2025:2070)
-#' curve <- kobeRebuildCurve(grid, seq(0, 1800, by = 25), target = 0.60)
+#' curve <- kobeRebuildCurve(grid, seq(0, 1800, by = 25), target = c(0.50, 0.60))
 #' plot(curve$catch, curve$rebuildYear, type = "l",
-#'      xlab = "Total removals (t)", ylab = "Year P(green) >= 0.60")
+#'      xlab = "Total removals (t)", ylab = "Year P(green) >= target")
 #' }
 #' @seealso \code{\link{kobeRebuildTime}}, \code{\link{kobeExchangeRate}}
 #' @export
 kobeRebuildCurve <- function(grid, catch, years = NULL, target = 0.6) {
+
+  if (length(target) > 1L) {
+    out <- do.call(rbind, lapply(target, function(p)
+      kobeRebuildCurve(grid, catch, years = years, target = p)))
+    rownames(out) <- NULL
+    return(out)
+  }
 
   surf <- kobeInterp(grid, catch, years)
 
@@ -1039,6 +1130,97 @@ kobeRebuildCurve <- function(grid, catch, years = NULL, target = 0.6) {
 
   rownames(out) <- NULL
   out
+}
+
+#' Lognormal intervals from a Kobe moment grid
+#'
+#' Converts \code{\link{kobeMomentGrid}} / \code{\link{kobeMomentGridJabba}}
+#' log-scale moments to the same nested intervals as \code{\link{lognormalCI}}:
+#' median \eqn{e^{\mu}} and \eqn{\mathrm{CV} = \sqrt{e^{\sigma^2}-1}}.
+#' Deterministic \eqn{F = 0} (\code{muF = -Inf}, \code{sigmaF = 0}) is a point
+#' mass at zero.
+#'
+#' @param grid A moment grid with \code{year}, \code{muB}, \code{muF},
+#'   \code{sigmaB}, \code{sigmaF}.
+#' @param quant \code{"B"} or \code{"F"}.
+#' @param levels Coverage probabilities, e.g. \code{c(0.5, 0.8, 0.95)}.
+#' @return \code{\link{lognormalCI}} long form, with \code{catch} / \code{run}
+#'   preserved when present.
+#' @seealso \code{\link{lognormalCI}}, \code{\link{kobeMomentGrid}}
+#' @export
+kobeMomentCI <- function(grid, quant = c("B", "F"),
+                         levels = c(0.5, 0.8, 0.95)) {
+
+  quant <- match.arg(quant)
+  need <- c("year", "muB", "muF", "sigmaB", "sigmaF")
+  if (!is.data.frame(grid) || !all(need %in% names(grid)))
+    stop("'grid' must be kobeMomentGrid / kobeMomentGridJabba output")
+
+  mu  <- if (quant == "B") grid$muB else grid$muF
+  sig <- if (quant == "B") grid$sigmaB else grid$sigmaF
+  det0 <- is.infinite(mu) & mu < 0 & is.finite(sig) & sig == 0
+  ratio <- ifelse(det0, 0, exp(mu))
+  cv <- ifelse(det0 | !is.finite(sig) | sig == 0, 0,
+               sqrt(pmax(exp(sig * sig) - 1, 0)))
+  traj <- data.frame(
+    year = grid$year,
+    value = ratio, valueSD = ratio * cv,
+    ratio = ratio, ratioSD = ratio * cv,
+    refpt = 1,
+    quantity = if (quant == "B") "ssb" else "f",
+    relative = "moments",
+    source = "kobeMomentGrid",
+    stringsAsFactors = FALSE)
+  if ("catch" %in% names(grid)) traj$catch <- grid$catch
+  if ("run" %in% names(grid))   traj$run   <- grid$run
+  lognormalCI(traj, levels = levels)
+}
+
+#' Bivariate-lognormal draws from a Kobe moment grid
+#'
+#' Samples \eqn{(B/B_{MSY},\, F/F_{MSY})} from the fitted log-moments, for
+#' phase plots with \code{kobe::kobePhaseMar}. Deterministic \eqn{F = 0} pins
+#' harvest at 0 and draws biomass only.
+#'
+#' @param grid One or more rows of \code{\link{kobeMomentGrid}} /
+#'   \code{\link{kobeMomentGridJabba}}.
+#' @param n Draws per grid row.
+#' @param seed Optional RNG seed.
+#' @return A \code{data.frame} with \code{stock}, \code{harvest}, \code{year}
+#'   and \code{run} (catch or run label).
+#' @seealso \code{\link{kobeMomentGrid}}, \code{\link{kobeInterp}}
+#' @export
+kobeDraws <- function(grid, n = 800, seed = NULL) {
+
+  need <- c("year", "muB", "muF", "sigmaB", "sigmaF", "rhoLog")
+  if (!is.data.frame(grid) || !all(need %in% names(grid)))
+    stop("'grid' must be kobeMomentGrid / kobeMomentGridJabba output")
+  if (!is.null(seed)) set.seed(seed)
+  lab <- if ("catch" %in% names(grid)) as.character(grid$catch)
+         else if ("run" %in% names(grid)) as.character(grid$run)
+         else as.character(seq_len(nrow(grid)))
+
+  rows <- lapply(seq_len(nrow(grid)), function(i) {
+    g <- grid[i, ]
+    if (isTRUE(g$sigmaF == 0) && is.infinite(g$muF) && g$muF < 0) {
+      zb <- exp(stats::rnorm(n, g$muB, g$sigmaB))
+      return(data.frame(stock = zb, harvest = 0, year = g$year, run = lab[i],
+                        stringsAsFactors = FALSE))
+    }
+    if (!is.finite(g$muB) || !is.finite(g$muF) ||
+        !is.finite(g$sigmaB) || !is.finite(g$sigmaF) || g$sigmaB <= 0 ||
+        g$sigmaF <= 0 || !is.finite(g$rhoLog))
+      return(NULL)
+    Sig <- matrix(c(g$sigmaB^2, g$rhoLog * g$sigmaB * g$sigmaF,
+                    g$rhoLog * g$sigmaB * g$sigmaF, g$sigmaF^2), 2, 2)
+    z <- mvtnorm::rmvnorm(n, mean = c(g$muB, g$muF), sigma = Sig)
+    data.frame(stock = exp(z[, 1]), harvest = exp(z[, 2]),
+               year = g$year, run = lab[i], stringsAsFactors = FALSE)
+  })
+  rows <- Filter(Negate(is.null), rows)
+  if (!length(rows))
+    stop("no finite moment rows to draw from")
+  do.call(rbind, rows)
 }
 
 #' Exchange rate between catch and rebuilding time
@@ -1171,29 +1353,60 @@ pAbove <- function(ratio, ratioSD, threshold = 1) {
   stats::pnorm(log(ratio / threshold) / sigma)
 }
 
-#' Load Stock Synthesis projection runs
-#'
-#' @param object Named character vector of run folders or \code{.rds}/\code{.Rdata}
-#'   paths, a named list of \code{SS_output} objects, or a directory whose
-#'   \code{*.Rdata} files are named \code{*_\\{catch\\}t.Rdata}.
-#' @param ... Unused.
-#' @return A named list of \code{SS_output}-shaped objects; names are catch
-#'   levels coercible to numeric (required by \code{\link{kobeMomentGrid}}).
-#' @examples
-#' \dontrun{
-#' runs <- getRuns(c(
-#'   "0" = "path/to/HW2e_..._0t.Rdata",
-#'   "250" = "path/to/HW2e_..._250t.Rdata"))
-#' runs <- getRuns("P:/.../SSoutput")  # discovers *_\\{catch\\}t.Rdata
-#' }
-#' @seealso \code{\link{kobeMomentGrid}}, \code{\link{makeK2SM}}
-#' @export
-setGeneric("getRuns", function(object, ...) standardGeneric("getRuns"))
+.getRunsIsSS <- function(o)
+  is.list(o) && all(c("timeseries", "derived_quants") %in% names(o))
 
-#' @rdname getRuns
-#' @export
-setMethod("getRuns", signature(object = "character"),
-  function(object, pattern = "_([0-9]+)t\\.Rdata$", ...) {
+.getRunsIsJabba <- function(o) {
+  is.list(o) && (
+    (is.data.frame(o$kbtrj) &&
+       all(c("year", "stock", "harvest") %in% names(o$kbtrj))) ||
+    (is.data.frame(o$kobe) &&
+       all(c("stock", "harvest") %in% names(o$kobe))))
+}
+
+.getRunsSsPattern    <- "_([0-9]+)t\\.Rdata$"
+.getRunsJabbaPattern <- "SMA2026_(.+)_jabba\\.rdata$"
+
+.getRunsSource <- function(object, pattern = NULL, runs = NULL,
+                           source = "auto") {
+
+  source <- match.arg(source, c("auto", "ss", "jabba"))
+  if (source != "auto") return(source)
+  if (!is.null(runs)) return("jabba")
+
+  if (is.character(object) && length(object) == 1L && dir.exists(object)) {
+    files <- list.files(object, pattern = "\\.Rdata$|\\.rds$|\\.rdata$",
+                        full.names = FALSE, ignore.case = TRUE)
+    pat <- if (is.null(pattern)) .getRunsSsPattern else pattern
+    hasPat <- any(grepl(pat, files, ignore.case = TRUE))
+    hasSs  <- any(grepl(.getRunsSsPattern, files, ignore.case = TRUE))
+    hasJb  <- any(grepl(.getRunsJabbaPattern, files, ignore.case = TRUE)) ||
+      any(grepl("_jabba\\.rdata$", files, ignore.case = TRUE))
+    if (!is.null(pattern) && hasPat) {
+      if (identical(pattern, .getRunsJabbaPattern) ||
+          grepl("jabba", pattern, ignore.case = TRUE))
+        return("jabba")
+      return("ss")
+    }
+    if (hasSs && hasJb)
+      stop("directory contains both SS (*_{catch}t.Rdata) and JABBA ",
+           "(*_jabba.rdata) files; set source = \"ss\" or \"jabba\"")
+    if (hasSs) return("ss")
+    if (hasJb) return("jabba")
+    stop("no SS (*_{catch}t.Rdata) or JABBA (*_jabba.rdata) files in ", object,
+         "; pass a named character vector of paths or set source")
+  }
+
+  nms <- names(object)
+  if (!is.null(nms) && length(nms) && all(nzchar(nms))) {
+    catch <- suppressWarnings(as.numeric(nms))
+    if (!any(is.na(catch))) return("ss")
+    return("jabba")
+  }
+  "ss"
+}
+
+.getRunsSS <- function(object, pattern = .getRunsSsPattern, ...) {
 
   if (length(object) == 1L && dir.exists(object)) {
     files <- list.files(object, pattern = "\\.Rdata$|\\.rds$",
@@ -1218,36 +1431,137 @@ setMethod("getRuns", signature(object = "character"),
   if (any(is.na(catch)))
     stop("names(object) must be catch levels coercible to numeric")
 
-  # stable order by catch
   object <- object[order(catch)]
 
   out <- lapply(object, function(p) {
     if (!file.exists(p) && !dir.exists(p))
       stop("path not found: ", p)
-    # ssLoad lives in trajectory.R
     ssLoad(p)
   })
   names(out) <- names(object)
   out
+}
+
+.getRunsJabba <- function(object,
+                          pattern = .getRunsJabbaPattern,
+                          runs = NULL, ...) {
+
+  if (length(object) == 1L && dir.exists(object)) {
+    files <- list.files(object, pattern = "\\.rdata$", full.names = TRUE,
+                        ignore.case = TRUE)
+    if (length(files) == 0L)
+      stop("no .rdata files in ", object)
+    m <- regexec(pattern, basename(files), ignore.case = TRUE)
+    hit <- regmatches(basename(files), m)
+    ok  <- lengths(hit) > 0L
+    if (!any(ok))
+      stop("no files matching ", pattern, " in ", object,
+           "; pass a named character vector of paths instead")
+    labs <- vapply(hit[ok], function(h) h[2L], character(1))
+    object <- setNames(files[ok], labs)
+  }
+
+  if (is.null(names(object)) || any(!nzchar(names(object))))
+    stop("'object' must be a named character vector of paths, ",
+         "or a directory of SMA2026_<run>_jabba.rdata files")
+
+  if (!is.null(runs)) {
+    keep <- names(object) %in% runs
+    if (!any(keep))
+      stop("none of requested runs found: ", paste(runs, collapse = ", "),
+           "; available: ", paste(names(object), collapse = ", "))
+    object <- object[keep]
+  }
+
+  out <- lapply(object, function(p) {
+    if (!file.exists(p))
+      stop("path not found: ", p)
+    env <- new.env(parent = emptyenv())
+    load(p, envir = env)
+    if (!exists("jabba", envir = env, inherits = FALSE))
+      stop("no object named 'jabba' in ", p)
+    env$jabba
+  })
+  names(out) <- names(object)
+  out
+}
+
+#' @rdname getRuns
+#' @param pattern Regular expression with one capture group for the run id
+#'   (catch level for SS; scenario label for JABBA) when \code{object} is a
+#'   directory.
+#' @param runs Optional character vector of JABBA run labels to keep; ignored
+#'   for SS. \code{NULL} keeps all discovered JABBA runs.
+#' @param source \code{"auto"}, \code{"ss"}, or \code{"jabba"}.
+#' @export
+setMethod("getRuns", signature(object = "character"),
+  function(object, pattern = NULL, runs = NULL,
+           source = c("auto", "ss", "jabba"), ...) {
+
+  source <- .getRunsSource(object, pattern = pattern, runs = runs,
+                           source = match.arg(source))
+  if (identical(source, "jabba")) {
+    if (is.null(pattern)) {
+      pattern <- .getRunsJabbaPattern
+      if (length(object) == 1L && dir.exists(object)) {
+        files <- list.files(object, pattern = "\\.rdata$",
+                            ignore.case = TRUE)
+        if (!any(grepl(.getRunsJabbaPattern, files, ignore.case = TRUE)) &&
+            any(grepl("_jabba\\.rdata$", files, ignore.case = TRUE)))
+          pattern <- "(.+)_jabba\\.rdata$"
+      }
+    }
+    return(.getRunsJabba(object, pattern = pattern, runs = runs, ...))
+  }
+  if (is.null(pattern)) pattern <- .getRunsSsPattern
+  if (!is.null(runs))
+    stop("'runs' is only used for JABBA inputs; set source = \"jabba\"")
+  .getRunsSS(object, pattern = pattern, ...)
 })
 
 #' @rdname getRuns
 #' @export
 setMethod("getRuns", signature(object = "list"),
-  function(object, ...) {
+  function(object, runs = NULL, source = c("auto", "ss", "jabba"), ...) {
 
   if (length(object) == 0L) stop("'object' is empty")
+  source <- match.arg(source)
+
+  ssFlag <- vapply(object, .getRunsIsSS, logical(1))
+  jbFlag <- vapply(object, .getRunsIsJabba, logical(1))
+
+  if (identical(source, "auto")) {
+    if (all(ssFlag)) source <- "ss"
+    else if (all(jbFlag)) source <- "jabba"
+    else
+      stop("list elements must all be SS_output-shaped or all JABBA fits; ",
+           "set source = \"ss\" or \"jabba\"")
+  }
+
+  if (identical(source, "jabba")) {
+    bad <- !jbFlag
+    if (any(bad))
+      stop("list elements must be JABBA fits; bad: ",
+           paste(names(object)[bad], collapse = ", "))
+    if (!is.null(runs)) {
+      keep <- names(object) %in% runs
+      if (!any(keep))
+        stop("none of requested runs found: ", paste(runs, collapse = ", "),
+             "; available: ", paste(names(object), collapse = ", "))
+      object <- object[keep]
+    }
+    return(object)
+  }
+
+  if (!is.null(runs))
+    stop("'runs' is only used for JABBA inputs; set source = \"jabba\"")
   catch <- suppressWarnings(as.numeric(names(object)))
   if (length(catch) == 0L || any(is.na(catch)))
     stop("names(object) must be catch levels coercible to numeric")
-
-  isSS <- function(o)
-    is.list(o) && all(c("timeseries", "derived_quants") %in% names(o))
-  bad <- !vapply(object, isSS, logical(1))
+  bad <- !ssFlag
   if (any(bad))
     stop("list elements must be SS_output-shaped; bad: ",
          paste(names(object)[bad], collapse = ", "))
-
   object[order(catch)]
 })
 
@@ -1295,10 +1609,14 @@ setMethod("makeK2SM", signature(object = "list"),
 setMethod("makeK2SM", signature(object = "data.frame"),
   function(object, years = NULL, asPercent = FALSE, ...) {
 
-  need <- c("catch", "year", "muB", "muF", "sigmaB", "sigmaF", "rhoLog")
-  if (!all(need %in% names(object)))
-    stop("'object' must be kobeMomentGrid output; missing: ",
-         paste(setdiff(need, names(object)), collapse = ", "))
+  # Scenario key: SS grids use numeric catch; JABBA grids use character run
+  scen <- if ("catch" %in% names(object)) "catch" else if ("run" %in% names(object))
+    "run" else NA_character_
+  need <- c(scen, "year", "muB", "muF", "sigmaB", "sigmaF", "rhoLog")
+  if (is.na(scen) || !all(need %in% names(object)))
+    stop("'object' must be kobeMomentGrid / kobeMomentGridJabba output; missing: ",
+         paste(setdiff(c("catch|run", "year", "muB", "muF", "sigmaB", "sigmaF",
+                         "rhoLog"), names(object)), collapse = ", "))
 
   if (is.null(years)) years <- sort(unique(object$year))
   g <- object[object$year %in% years, , drop = FALSE]
@@ -1307,17 +1625,20 @@ setMethod("makeK2SM", signature(object = "data.frame"),
     r <- g[i, ]
     q <- function(w)
       kobeGreen(r$muB, r$muF, r$sigmaB, r$sigmaF, r$rhoLog, quadrant = w)
-    data.frame(catch = r$catch, year = r$year,
-               pNoOverfishing = stats::pnorm(0, r$muF, r$sigmaF),
-               pNotOverfished = 1 - stats::pnorm(0, r$muB, r$sigmaB),
-               green = q("green"),
-               stringsAsFactors = FALSE)
+    out <- data.frame(year = r$year,
+                      pNoOverfishing = kobePNoOverfishing(r$muF, r$sigmaF),
+                      pNotOverfished = kobePNotOverfished(r$muB, r$sigmaB),
+                      green = q("green"),
+                      stringsAsFactors = FALSE)
+    out[[scen]] <- r[[scen]]
+    out[, c(scen, "year", "pNoOverfishing", "pNotOverfished", "green"),
+        drop = FALSE]
   }))
   rownames(long) <- NULL
 
   pivot <- function(col) {
-    m <- reshape(long[, c("catch", "year", col)],
-                 idvar = "catch", timevar = "year", direction = "wide")
+    m <- reshape(long[, c(scen, "year", col)],
+                 idvar = scen, timevar = "year", direction = "wide")
     names(m) <- sub(paste0("^", col, "\\."), "", names(m))
     rownames(m) <- NULL
     if (asPercent) {
@@ -1333,6 +1654,340 @@ setMethod("makeK2SM", signature(object = "data.frame"),
        green          = pivot("green"),
        long           = long)
 })
+
+# ===========================================================================
+# JABBA assessment Kobe (MCMC moments -> analytic pmvnorm)
+# ===========================================================================
+
+#' Load final JABBA assessment fits
+#'
+#' Thin wrapper around \code{\link{getRuns}} with \code{source = "jabba"}.
+#' Discovers \code{*_jabba.rdata} files (object name \code{jabba}) under a
+#' directory, or loads a named character vector of paths. Default run filter
+#' matches the 2026 North Atlantic shortfin mako executive-summary ensemble
+#' (\code{1-B}, \code{1-S}, \code{2-S}).
+#'
+#' @param object Directory containing JABBA fits, or a named character vector of
+#'   \code{.rdata} paths (names = run labels).
+#' @param pattern Regular expression with one capture group for the run id when
+#'   \code{object} is a directory. Default matches \code{SMA2026_<run>_jabba.rdata}.
+#' @param runs Optional character vector of run labels to keep (e.g.
+#'   \code{c("1-B", "1-S", "2-S")}). \code{NULL} keeps all discovered runs.
+#' @param ... Unused.
+#' @return Named list of JABBA fit objects.
+#' @examples
+#' \dontrun{
+#' jb <- getJabbaRuns(
+#'   "P:/rfmo/iccat/2026/SHK/Analysis/final assessment results/JABBA/final3JABBA/outputCorrected")
+#' names(jb)
+#' }
+#' @seealso \code{\link{getRuns}}, \code{\link{kobeMomentGridJabba}},
+#'   \code{\link{jabbaKbtrj}}
+#' @export
+getJabbaRuns <- function(object,
+                         pattern = "SMA2026_(.+)_jabba\\.rdata$",
+                         runs = c("1-B", "1-S", "2-S"),
+                         ...) {
+  getRuns(object, pattern = pattern, runs = runs, source = "jabba", ...)
+}
+
+#' Extract JABBA Kobe trajectories (\code{kbtrj})
+#'
+#' Returns the MCMC stock / harvest trajectories from a JABBA fit. Optional
+#' end-of-year biomass alignment matches
+#' \code{jabba_1yrprj_Kobe_AK.R}: shift \code{stock} back one year, keep
+#' \code{harvest} on the original year calendar, then restrict to
+#' \code{[yearMin, yearMax]}.
+#'
+#' @param fit A JABBA fit with \code{kbtrj} (year, iter, stock, harvest, ...).
+#' @param yearAdj Logical; apply the one-year stock lag used for the 2026 NSMA
+#'   joint Kobe products. Default \code{FALSE}: assessment-only \code{kbtrj}
+#'   (through terminal year) needs a short \code{fw_jabba} extension before
+#'   \code{TRUE} is valid; prefer \code{NSMA_6JABBA_all_adj.Rdata} when available.
+#' @param yearMin,yearMax Inclusive year window after adjustment (default
+#'   1950--2024).
+#' @param iters Optional integer vector of MCMC iteration indices to keep
+#'   (e.g. the executive-summary \code{seed5000} draw).
+#' @return A \code{data.frame} with at least \code{year}, \code{iter},
+#'   \code{stock}, \code{harvest}, and \code{run} when available.
+#' @seealso \code{\link{getJabbaRuns}}, \code{\link{kobeMomentGridJabba}}
+#' @export
+jabbaKbtrj <- function(fit, yearAdj = FALSE, yearMin = 1950, yearMax = 2024,
+                       iters = NULL) {
+
+  if (is.null(fit$kbtrj) || !is.data.frame(fit$kbtrj))
+    stop("JABBA fit must have a data.frame 'kbtrj' component")
+
+  kb <- fit$kbtrj
+  need <- c("year", "iter", "stock", "harvest")
+  if (!all(need %in% names(kb)))
+    stop("'kbtrj' must have columns: ", paste(need, collapse = ", "))
+
+  if (!"run" %in% names(kb)) {
+    lab <- if (!is.null(fit$scenario) && nzchar(as.character(fit$scenario)[1L]))
+      as.character(fit$scenario)[1L]
+    else if (!is.null(fit$kobe) && is.data.frame(fit$kobe) &&
+             "level" %in% names(fit$kobe))
+      as.character(fit$kobe$level[1L])
+    else
+      NA_character_
+    kb$run <- lab
+  }
+
+  if (isTRUE(yearAdj)) {
+    st <- kb[, c("iter", "year", "run", "stock"), drop = FALSE]
+    st$year <- st$year - 1L
+    kb$stock <- NULL
+    kb <- merge(kb, st, by = c("iter", "year", "run"), all = TRUE)
+  }
+
+  kb <- kb[is.finite(kb$year) & kb$year >= yearMin & kb$year <= yearMax, ,
+           drop = FALSE]
+  if (!is.null(iters))
+    kb <- kb[kb$iter %in% iters, , drop = FALSE]
+
+  kb[order(kb$run, kb$year, kb$iter), , drop = FALSE]
+}
+
+#' Forward catch projections from a JABBA fit
+#'
+#' Thin wrapper around \code{JABBA::fw_jabba} that returns a tidy trajectory
+#' table with a numeric \code{catch} column suitable for
+#' \code{\link{kobeMomentGridJabba}} / \code{\link{makeK2SM}}. Absolute constant
+#' catches follow the ICCAT-style usage in
+#' \code{MakoNorthJabba2026AtMeeting.r} and \code{jabba_1yrprj_Kobe_AK.R}.
+#'
+#' @param fit A single JABBA fit with \code{kbtrj} (\code{save.trj = TRUE}).
+#' @param catch Numeric vector of absolute catch scenarios (t).
+#' @param nyears Number of projection years after the terminal assessment year.
+#' @param imp.yr Implementation year index within the projection window
+#'   (default 3: two bridge years under \code{initial}, then TAC).
+#' @param initial Bridge-year catch; default mean of the last three assessment
+#'   years' catch.
+#' @param stochastic,AR1,thin Passed to \code{fw_jabba}.
+#' @param prjOnly If \code{TRUE} (default), drop assessment (\code{type == "fit"})
+#'   rows so the table is projection-only.
+#' @return A \code{data.frame} with \code{catch}, \code{year}, \code{iter},
+#'   \code{stock}, \code{harvest}, and other \code{fw_jabba} columns.
+#' @examples
+#' \dontrun{
+#' jb  <- getJabbaRuns(".../outputCorrected", runs = "1-S")
+#' prj <- projectJabba(jb[["1-S"]], catch = c(0, 250, 1200, 1883), nyears = 46)
+#' grid <- kobeMomentGridJabba(prj, years = c(2030, 2050, 2070))
+#' }
+#' @seealso \code{\link{getJabbaRuns}}, \code{\link{kobeMomentGridJabba}}
+#' @export
+projectJabba <- function(fit, catch,
+                         nyears = 46, imp.yr = 3, initial = NULL,
+                         stochastic = TRUE, AR1 = FALSE, thin = 1,
+                         prjOnly = TRUE) {
+
+  if (!requireNamespace("JABBA", quietly = TRUE))
+    stop("package 'JABBA' is required for projectJabba(); install jabbamodel/JABBA")
+  if (is.null(fit$kbtrj) || !is.data.frame(fit$kbtrj))
+    stop("JABBA fit must have kbtrj (fit with save.trj = TRUE)")
+  if (missing(catch) || length(catch) < 1L || any(!is.finite(catch)) ||
+      any(catch < 0))
+    stop("'catch' must be a non-negative numeric vector of absolute TACs")
+
+  if (is.null(initial)) {
+    cc <- fit$catch
+    if (is.data.frame(cc) && "catch" %in% names(cc))
+      initial <- mean(utils::tail(cc$catch, 3L), na.rm = TRUE)
+    else if (is.numeric(cc))
+      initial <- mean(utils::tail(cc, 3L), na.rm = TRUE)
+    else
+      stop("cannot infer 'initial' from fit$catch; supply initial= explicitly")
+  }
+
+  kb <- JABBA::fw_jabba(
+    jabba = fit,
+    nyears = nyears,
+    imp.yr = imp.yr,
+    initial = initial,
+    imp.values = as.numeric(catch),
+    quant = "Catch",
+    type = "abs",
+    nsq = 3,
+    stochastic = stochastic,
+    AR1 = AR1,
+    thin = thin)
+
+  if (isTRUE(prjOnly) && "type" %in% names(kb))
+    kb <- kb[as.character(kb$type) == "prj", , drop = FALSE]
+
+  # fw_jabba labels projection runs as C0, C250, ... (fit rows keep scenario name)
+  catchFromRun <- function(rn) {
+    rn <- as.character(rn)
+    ifelse(grepl("^C[0-9.]+$", rn),
+           suppressWarnings(as.numeric(sub("^C", "", rn))),
+           NA_real_)
+  }
+  kb$catch <- catchFromRun(kb$run)
+
+  if (any(!is.finite(kb$catch))) {
+    # Fall back: match unique run levels to supplied catch in order of appearance
+    lv <- unique(as.character(kb$run))
+    if (length(lv) == length(catch)) {
+      map <- setNames(as.numeric(catch), lv)
+      kb$catch <- unname(map[as.character(kb$run)])
+    }
+  }
+  if (any(!is.finite(kb$catch)))
+    stop("could not parse numeric catch from fw_jabba run labels: ",
+         paste(unique(as.character(kb$run)), collapse = ", "))
+
+  kb[order(kb$catch, kb$year, kb$iter), , drop = FALSE]
+}
+
+#' Log-scale Kobe moments from JABBA MCMC
+#'
+#' For each scenario and year, fits a bivariate normal on
+#' \eqn{(\log B/B_{MSY},\, \log F/F_{MSY})} from \code{kbtrj} / projection
+#' posteriors. Scenario key is numeric \code{catch} when present (e.g. from
+#' \code{\link{projectJabba}}), otherwise character \code{run}.
+#' The resulting grid feeds \code{\link{makeK2SM}} / \code{\link{kobeGreen}}.
+#'
+#' @param runs Named list of JABBA fits (as from \code{\link{getJabbaRuns}}), or
+#'   a \code{kbtrj}-style \code{data.frame} with \code{year}, \code{stock},
+#'   \code{harvest}, and either \code{catch} or \code{run}.
+#' @param years Numeric years to summarise; default all years present after
+#'   \code{\link{jabbaKbtrj}} processing.
+#' @param yearAdj,yearMin,yearMax,iters Passed to \code{\link{jabbaKbtrj}} when
+#'   \code{runs} is a fit list.
+#' @return A \code{data.frame} with scenario column (\code{catch} or \code{run}),
+#'   \code{year}, \code{muB}, \code{muF}, \code{sigmaB}, \code{sigmaF},
+#'   \code{rhoLog}, \code{feasible}.
+#' @examples
+#' \dontrun{
+#' jb   <- getJabbaRuns(".../outputCorrected", runs = "1-S")
+#' prj  <- projectJabba(jb[["1-S"]], catch = c(0, 250, 1200))
+#' grid <- kobeMomentGridJabba(prj, years = c(2030, 2050, 2070))
+#' makeK2SM(grid, years = c(2030, 2050, 2070))
+#' }
+#' @seealso \code{\link{kobeMomentGrid}}, \code{\link{makeK2SM}},
+#'   \code{\link{projectJabba}}, \code{\link{jabbaKbtrj}}
+#' @export
+kobeMomentGridJabba <- function(runs, years = NULL, yearAdj = FALSE,
+                                yearMin = 1950, yearMax = 2024,
+                                iters = NULL) {
+
+  kb <- if (is.data.frame(runs)) {
+    need <- c("year", "stock", "harvest")
+    if (!all(need %in% names(runs)))
+      stop("kbtrj data.frame must have columns: ", paste(need, collapse = ", "))
+    runs
+  } else if (is.list(runs)) {
+    if (length(runs) == 0L) stop("'runs' is empty")
+    do.call(rbind, lapply(seq_along(runs), function(i) {
+      kb_i <- jabbaKbtrj(runs[[i]], yearAdj = yearAdj, yearMin = yearMin,
+                         yearMax = yearMax, iters = iters)
+      # Prefer list names (exec-summary labels) over internal run column
+      kb_i$run <- names(runs)[i]
+      kb_i
+    }))
+  } else {
+    stop("'runs' must be a named list of JABBA fits or a kbtrj data.frame")
+  }
+
+  scen <- if ("catch" %in% names(kb)) "catch" else "run"
+  if (scen == "run" && !"run" %in% names(kb)) kb$run <- "run"
+
+  if (is.null(years))
+    years <- sort(unique(kb$year[is.finite(kb$stock) & is.finite(kb$harvest)]))
+
+  scen_vals <- unique(kb[[scen]])
+  out <- do.call(rbind, lapply(scen_vals, function(sv) {
+    d0 <- kb[kb[[scen]] == sv, , drop = FALSE]
+    do.call(rbind, lapply(years, function(y) {
+      d <- d0[d0$year == y & is.finite(d0$stock) & is.finite(d0$harvest) &
+                d0$stock > 0, , drop = FALSE]
+      empty <- data.frame(year = y,
+                          muB = NA_real_, muF = NA_real_,
+                          sigmaB = NA_real_, sigmaF = NA_real_,
+                          rhoLog = NA_real_, feasible = NA,
+                          stringsAsFactors = FALSE)
+      empty[[scen]] <- sv
+      empty <- empty[c(scen, setdiff(names(empty), scen))]
+
+      # Zero / near-zero F: biomass margin only (same idea as SS F = 0)
+      harv_ok <- is.finite(d$harvest) & d$harvest > 1e-8
+      if (nrow(d) < 3L) return(empty)
+      lb <- log(d$stock)
+      sB <- stats::sd(lb)
+      if (!is.finite(sB) || sB <= 0) return(empty)
+
+      if (sum(harv_ok) < 3L ||
+          all(!is.finite(d$harvest[harv_ok]) | d$harvest[harv_ok] <= 1e-8)) {
+        return(data.frame(setNames(list(sv), scen), year = y,
+                          muB = mean(lb), muF = -Inf,
+                          sigmaB = sB, sigmaF = 0, rhoLog = 0,
+                          feasible = TRUE, stringsAsFactors = FALSE))
+      }
+
+      dH <- d[harv_ok, , drop = FALSE]
+      lf <- log(dH$harvest)
+      sF <- stats::sd(lf)
+      if (!is.finite(sF) || sF <= 0) {
+        return(data.frame(setNames(list(sv), scen), year = y,
+                          muB = mean(lb), muF = -Inf,
+                          sigmaB = sB, sigmaF = 0, rhoLog = 0,
+                          feasible = TRUE, stringsAsFactors = FALSE))
+      }
+      rho <- stats::cor(log(dH$stock), lf)
+      feasible <- is.finite(rho) && abs(rho) < 1
+      if (!feasible) {
+        rho <- if (!is.finite(rho) || rho == 0) 0 else sign(rho) * (1 - 1e-8)
+      }
+      data.frame(setNames(list(sv), scen), year = y,
+                 muB = mean(lb), muF = mean(lf),
+                 sigmaB = sB, sigmaF = sF, rhoLog = rho,
+                 feasible = feasible, stringsAsFactors = FALSE)
+    }))
+  }))
+
+  out <- out[order(out[[scen]], out$year), , drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
+
+#' Relative biomass / F trajectories from JABBA \code{timeseries}
+#'
+#' Builds a tidy table of median and quantile intervals from
+#' \code{fit$timeseries} (\code{mu}, \code{lci}, \code{uci}) for plotting with
+#' vanilla ggplot2. This uses JABBA's summarised bands (not the year-adjusted
+#' \code{kbtrj} product); for exec-summary alignment prefer quantiles of
+#' \code{\link{jabbaKbtrj}}.
+#'
+#' @param fit A JABBA fit with a 3-d \code{timeseries} array.
+#' @param quant Character quantity in the third dimension; default
+#'   \code{"BBmsy"} (\eqn{B/B_{MSY}}). Use \code{"FFmsy"} for relative F.
+#' @return A \code{data.frame} with \code{year}, \code{ratio}, \code{ratioLo},
+#'   \code{ratioHi}, \code{quantity}.
+#' @seealso \code{\link{jabbaTs}}, \code{\link{jabbaKbtrj}}
+#' @export
+jabbaTrajectory <- function(fit, quant = c("BBmsy", "FFmsy")) {
+
+  quant <- match.arg(quant)
+  if (is.null(fit$timeseries) && !is.null(fit$fit$timeseries))
+    fit <- fit$fit
+  ts <- fit$timeseries
+  if (is.null(ts) || length(dim(ts)) != 3L)
+    stop("JABBA fit must have a 3-d 'timeseries' array")
+  dn <- dimnames(ts)
+  if (!all(c("mu", "lci", "uci") %in% dn[[2]]))
+    stop("timeseries second dimension must include mu, lci, uci")
+  if (!quant %in% dn[[3]])
+    stop("quantity '", quant, "' not in timeseries; available: ",
+         paste(dn[[3]], collapse = ", "))
+
+  data.frame(year = as.numeric(dn[[1]]),
+             ratio = as.numeric(ts[, "mu", quant]),
+             ratioLo = as.numeric(ts[, "lci", quant]),
+             ratioHi = as.numeric(ts[, "uci", quant]),
+             quantity = quant,
+             stringsAsFactors = FALSE)
+}
 
 #' Rebuild reference points from a recovery-time curve
 #'
